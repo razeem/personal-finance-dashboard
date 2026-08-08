@@ -1,4 +1,10 @@
-import { DEFAULT_FINANCE_INPUTS, deriveFinance, makeLineItem, makeMonths } from './finance.model';
+import {
+  DEFAULT_FINANCE_INPUTS,
+  deriveFinance,
+  makeLineItem,
+  makeLoan,
+  makeMonths,
+} from './finance.model';
 import {
   aggregateByFy,
   applyEdit,
@@ -109,7 +115,7 @@ describe('snapshotFromDerived', () => {
       needs: [makeLineItem('Rent', 20_000)],
       wants: [makeLineItem('Dining', 10_000)],
     },
-    loan: { emis: [makeLineItem('Car', 15_000)] },
+    loan: { loans: [makeLoan('Car', 15_000)] },
     insurance: { premiums: [makeLineItem('Term', 24_000, 'yearly')] }, // ₹2,000/mo
     investing: {
       mandatory: [makeLineItem('EPF', 1_850)],

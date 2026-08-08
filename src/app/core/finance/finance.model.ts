@@ -44,6 +44,94 @@ export interface LineItem {
   mandatory?: boolean;
 }
 
+/** What a loan is for. Kept separate from `name` so it can drive tax treatment later. */
+export type LoanKind = 'home' | 'other';
+
+/**
+ * One borrowing, as the Loan pillar owns it.
+ *
+ * Replaces the flat `LineItem` EMIs from finance v5. Only `name` and `emi` come
+ * across the migration — everything a forecast needs is null until the user
+ * fills it in, and the Forecast tab prompts for the gaps rather than guessing.
+ *
+ * `principal` is the **outstanding balance today**, not the amount originally
+ * borrowed. That is what a debt-free forecast actually needs, and it means the
+ * projection works without knowing when the loan started.
+ */
+export interface Loan {
+  id: string;
+  name: string;
+  /** The instalment. Paid monthly unless `period` says otherwise. */
+  emi: number;
+  /**
+   * How often `emi` is billed. Absent = monthly. Carried over from the v5 line
+   * items so no declared budget figure moves during the migration; the forecast
+   * asks the user to convert a yearly loan rather than converting it silently.
+   */
+  period?: LinePeriod;
+  /** Outstanding balance today. Null until declared. */
+  principal: number | null;
+  /** Nominal annual interest rate as a percentage (0 is valid). Null until declared. */
+  annualRatePct: number | null;
+  /** `YYYY-MM-DD` the loan started. Informational — the forecast does not need it. */
+  startDate: string | null;
+  kind: LoanKind;
+}
+
+export function makeLoan(name = '', emi = 0): Loan {
+  return {
+    id: makeId('loan'),
+    name,
+    emi,
+    principal: null,
+    annualRatePct: null,
+    startDate: null,
+    kind: 'other',
+  };
+}
+
+/** The monthly-equivalent instalment (a yearly-billed loan counts as its twelfth). */
+export function monthlyEmi(loan: Loan): number {
+  const value = Number.isFinite(loan.emi) ? loan.emi : 0;
+  return loan.period === 'yearly' ? value / 12 : value;
+}
+
+/** Sum loans as monthly-equivalents — what the budget counts under Needs. */
+export function sumLoansMonthly(loans: readonly Loan[]): number {
+  return loans.reduce((sum, loan) => sum + monthlyEmi(loan), 0);
+}
+
+/**
+ * Something a loan still needs before it can be forecast. `billedYearly` is not
+ * a missing value but a mismatch: the amortization core is monthly end to end,
+ * so a yearly-billed loan has no representation in it.
+ */
+export type LoanGap = 'principal' | 'rate' | 'emi' | 'billedYearly';
+
+/** Everything standing between this loan and a debt-free projection, in prompt order. */
+export function loanGaps(loan: Loan): LoanGap[] {
+  const gaps: LoanGap[] = [];
+  if (!(Number(loan.emi) > 0)) gaps.push('emi');
+  if (!(Number(loan.principal) > 0)) gaps.push('principal');
+  if (loan.annualRatePct === null || !Number.isFinite(loan.annualRatePct)) gaps.push('rate');
+  if (loan.period === 'yearly') gaps.push('billedYearly');
+  return gaps;
+}
+
+export function isForecastReady(loan: Loan): boolean {
+  return loanGaps(loan).length === 0;
+}
+
+/**
+ * Restate a yearly-billed loan as its monthly twelfth. Only ever called from an
+ * explicit user action — the arithmetic is shown before it is applied, because
+ * this asserts something about the loan rather than reformatting a number.
+ */
+export function toMonthlyBilling(loan: Loan): Loan {
+  if (loan.period !== 'yearly') return loan;
+  return { ...loan, emi: Math.round((loan.emi / 12) * 100) / 100, period: 'monthly' };
+}
+
 /** Spend-allocation target: Living : Safety : Growth & Freedom (percentages, sum 100). */
 export interface AllocationTarget {
   living: number;
@@ -91,7 +179,7 @@ export interface FinanceInputs {
     needs: LineItem[];
     wants: LineItem[];
   };
-  loan: { emis: LineItem[] };
+  loan: { loans: Loan[] };
   /** Saving pillar: the chosen emergency-fund multiplier (× essential expense). */
   saving: { emergencyMultiplier: EmergencyMultiplier };
   insurance: { premiums: LineItem[] };
@@ -243,7 +331,7 @@ export const DEFAULT_FINANCE_INPUTS: FinanceInputs = {
   },
   ideas: [],
   spending: { needs: [], wants: [] },
-  loan: { emis: [] },
+  loan: { loans: [] },
   saving: { emergencyMultiplier: DEFAULT_EMERGENCY_MULTIPLIER },
   insurance: {
     // Insurance is usually paid yearly.
@@ -282,7 +370,7 @@ export function deriveFinance(
   const annualGross = months && months.length ? sumMonths(months) : gross * 12;
   const shortTermSavings = Math.max(0, inputs.income.shortTermSavings || 0);
 
-  const totalLoanEmis = sumLineItemsMonthly(inputs.loan.emis); // period-aware (yearly ÷ 12)
+  const totalLoanEmis = sumLoansMonthly(inputs.loan.loans); // period-aware (yearly ÷ 12)
   const totalNeeds = sumLineItems(inputs.spending.needs) + totalLoanEmis; // EMIs roll into Needs
   const totalWants = sumLineItems(inputs.spending.wants);
   const totalInsurance = sumLineItemsMonthly(inputs.insurance.premiums); // period-aware (yearly ÷ 12)

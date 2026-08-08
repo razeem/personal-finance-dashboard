@@ -64,7 +64,7 @@ export class TransferError extends Error {
  * incoming documents `newer-unsupported`, which silently skips them on import.
  */
 export const KNOWN_COLLECTIONS: Record<string, { label: string; version: number }> = {
-  finance: { label: 'Finance', version: 5 },
+  finance: { label: 'Finance', version: 6 },
   'finance-history': { label: 'Month history', version: 1 },
   profile: { label: 'Profile', version: 1 },
   'tax-config': { label: 'Tax rules', version: 1 },

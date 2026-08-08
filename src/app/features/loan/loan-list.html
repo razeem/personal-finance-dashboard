@@ -1,0 +1,153 @@
+<div class="flex flex-col gap-3">
+  @for (loan of loans.items(); track loan.id) {
+    <div
+      class="flex flex-col gap-2 rounded-[var(--r-control)] border border-[var(--border)] p-3"
+      [attr.data-testid]="'loan-row'"
+    >
+      <!-- Row 1: what the budget needs — a name and an instalment -->
+      <div
+        class="grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_auto]"
+      >
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="min-w-0">
+          <mat-label>Loan</mat-label>
+          <input
+            matInput
+            [ngModel]="loan.name"
+            (ngModelChange)="set(loan.id, { name: $event })"
+            data-testid="loan-name"
+          />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="min-w-0">
+          <mat-label>Instalment</mat-label>
+          <span matTextPrefix>₹&nbsp;</span>
+          <input
+            matInput
+            type="number"
+            min="0"
+            inputmode="numeric"
+            [ngModel]="loan.emi"
+            (ngModelChange)="setAmount(loan.id, 'emi', $event)"
+            data-testid="loan-emi"
+          />
+        </mat-form-field>
+
+        <mat-button-toggle-group
+          class="h-10 self-center"
+          [value]="loan.period ?? 'monthly'"
+          (change)="setPeriod(loan.id, $event.value)"
+          aria-label="Billing frequency"
+          data-testid="loan-period"
+        >
+          <mat-button-toggle value="monthly">/mo</mat-button-toggle>
+          <mat-button-toggle value="yearly">/yr</mat-button-toggle>
+        </mat-button-toggle-group>
+      </div>
+
+      <!-- Row 2: what a forecast needs — optional, prompted for, never guessed -->
+      <div
+        class="grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-[repeat(auto-fit,minmax(140px,1fr))]"
+      >
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="min-w-0">
+          <mat-label>Outstanding</mat-label>
+          <span matTextPrefix>₹&nbsp;</span>
+          <input
+            matInput
+            type="number"
+            min="0"
+            inputmode="numeric"
+            [ngModel]="loan.principal"
+            (ngModelChange)="setAmount(loan.id, 'principal', $event)"
+            data-testid="loan-principal"
+          />
+          <mat-hint>Balance left today</mat-hint>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="min-w-0">
+          <mat-label>Interest</mat-label>
+          <input
+            matInput
+            type="number"
+            min="0"
+            step="0.1"
+            inputmode="decimal"
+            [ngModel]="loan.annualRatePct"
+            (ngModelChange)="setAmount(loan.id, 'annualRatePct', $event)"
+            data-testid="loan-rate"
+          />
+          <span matTextSuffix>%&nbsp;p.a.</span>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="min-w-0">
+          <mat-label>Type</mat-label>
+          <mat-select
+            [ngModel]="loan.kind"
+            (ngModelChange)="set(loan.id, { kind: $event })"
+            data-testid="loan-kind"
+          >
+            @for (kind of kinds; track kind.value) {
+              <mat-option [value]="kind.value">{{ kind.label }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="min-w-0">
+          <mat-label>Started</mat-label>
+          <input
+            matInput
+            type="date"
+            [ngModel]="loan.startDate"
+            (ngModelChange)="set(loan.id, { startDate: $event || null })"
+            data-testid="loan-start"
+          />
+        </mat-form-field>
+      </div>
+
+      <!-- Row 3: status + remove -->
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+        @if (isBilledYearly(loan)) {
+          <span class="app-num text-[0.82rem] text-[var(--mat-sys-on-surface-variant)]">
+            {{ monthly(loan) | inr }}/mo in your budget
+          </span>
+        }
+        @if (gaps(loan).length) {
+          <span
+            class="text-[0.8rem] text-[var(--mat-sys-on-surface-variant)]"
+            [attr.data-testid]="'loan-gaps-' + loan.id"
+          >
+            <mat-icon class="!h-4 !w-4 !text-base align-middle">info</mat-icon>
+            Needs {{ gaps(loan).join(', ') }} to forecast
+          </span>
+        } @else {
+          <span class="text-[0.8rem] text-[var(--good, #0d8a62)]" data-testid="loan-ready">
+            Ready to forecast
+          </span>
+        }
+        <button
+          mat-icon-button
+          type="button"
+          class="ml-auto"
+          aria-label="Remove loan"
+          (click)="loans.remove(loan.id)"
+          data-testid="loan-remove"
+        >
+          <mat-icon>delete_outline</mat-icon>
+        </button>
+      </div>
+    </div>
+  } @empty {
+    <p class="my-1 text-[0.88rem] text-[var(--mat-sys-on-surface-variant)]">
+      No loans declared yet.
+    </p>
+  }
+
+  <div class="mt-1 flex items-center justify-between">
+    <button mat-stroked-button type="button" (click)="add()" data-testid="loan-add">
+      <mat-icon>add</mat-icon>
+      Add loan
+    </button>
+    <span class="app-num text-[1.05rem] font-bold" data-testid="loan-total">
+      {{ total() | inr }}
+    </span>
+  </div>
+</div>

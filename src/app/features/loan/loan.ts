@@ -7,13 +7,13 @@ import { FinanceStore } from '../../core/finance/finance-store';
 import { PageHeader } from '../../shared/ui/page-header/page-header';
 import { SectionCard } from '../../shared/ui/section-card/section-card';
 import { StatTile } from '../../shared/ui/stat-tile/stat-tile';
-import { LineItemList } from '../../shared/ui/line-item-list/line-item-list';
 import { EmiCalculator } from './emi-calculator';
+import { LoanList } from './loan-list';
 
 @Component({
   selector: 'app-loan',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [InrPipe, MatTabsModule, PageHeader, SectionCard, StatTile, LineItemList, EmiCalculator],
+  imports: [InrPipe, MatTabsModule, PageHeader, SectionCard, StatTile, LoanList, EmiCalculator],
   templateUrl: './loan.html',
 })
 export class Loan {
@@ -21,7 +21,6 @@ export class Loan {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
-  protected readonly emis = this.store.loanEmis;
   protected readonly derived = this.store.derived;
 
   // ---- Deep-linkable tabs (?tab=loans|calculator) ----

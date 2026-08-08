@@ -3,7 +3,9 @@ import {
   deriveFinance,
   FinanceInputs,
   icerScore,
+  Loan,
   makeLineItem,
+  makeLoan,
   makeMonths,
   sumLineItems,
   sumMonths,
@@ -35,7 +37,7 @@ describe('deriveFinance (monthly inputs, annualised tax)', () => {
     ...DEFAULT_FINANCE_INPUTS,
     income: { gross: 100_000, shortTermSavings: 5_000, months: makeMonths(100_000) },
     spending: { needs: [li(20_000), li(5_000)], wants: [li(10_000)] },
-    loan: { emis: [li(15_000)] },
+    loan: { loans: [makeLoan('Car', 15_000)] },
     insurance: { premiums: [li(2_000)] },
     investing: { mandatory: [], voluntary: [li(3_000)] },
     tax: { regime: 'old', deductions: DEFAULT_FINANCE_INPUTS.tax.deductions },
@@ -66,8 +68,8 @@ describe('deriveFinance (monthly inputs, annualised tax)', () => {
   });
 
   it('treats loan EMIs as period-aware (yearly ÷ 12)', () => {
-    const yearly = { ...makeLineItem('Car', 24_000, 'yearly') }; // ₹2,000/mo
-    const d = deriveFinance({ ...inputs, loan: { emis: [yearly] } });
+    const yearly: Loan = { ...makeLoan('Car', 24_000), period: 'yearly' }; // ₹2,000/mo
+    const d = deriveFinance({ ...inputs, loan: { loans: [yearly] } });
     expect(d.totalLoanEmis).toBe(2_000);
   });
 
@@ -207,7 +209,7 @@ describe('deriveFinance — edge cases', () => {
     goals: { mustHave: [], goodToHave: [] },
     ideas: [],
     spending: { needs: [], wants: [] },
-    loan: { emis: [] },
+    loan: { loans: [] },
     saving: { emergencyMultiplier: 6 },
     insurance: { premiums: [] },
     investing: { mandatory: [], voluntary: [] },
@@ -256,7 +258,7 @@ describe('deriveFinance — minimum income is floored at zero', () => {
     income: { gross: 100_000, shortTermSavings: 0, months: makeMonths(100_000) },
     // …against only the default ₹1,850 EPF as an outgoing.
     spending: { needs: [], wants: [] },
-    loan: { emis: [] },
+    loan: { loans: [] },
     insurance: { premiums: [] },
     investing: { mandatory: [makeLineItem('EPF', 1_850)], voluntary: [] },
     tax: { regime: 'old', deductions: DEFAULT_FINANCE_INPUTS.tax.deductions },

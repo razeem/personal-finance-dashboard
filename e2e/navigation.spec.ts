@@ -32,7 +32,7 @@ test('saving pillar sizes an emergency fund from the essential expense', async (
 test('loan EMIs support monthly/yearly and roll into a monthly total', async ({ page }) => {
   await page.goto('/loan');
   await page.getByTestId('loan-add').click();
-  await page.getByTestId('loan-value').first().fill('15000'); // defaults to monthly
+  await page.getByTestId('loan-emi').first().fill('15000'); // defaults to monthly
   await expect(page.getByTestId('loan-total-tile')).toContainText('15,000');
 });
 

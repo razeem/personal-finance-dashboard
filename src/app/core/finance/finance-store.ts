@@ -13,7 +13,10 @@ import {
   Goal,
   IdeaRow,
   LineItem,
+  Loan,
+  makeId,
   makeMonths,
+  toMonthlyBilling,
 } from './finance.model';
 
 /** CRUD surface for one list living inside the shared finance model. */
@@ -37,7 +40,7 @@ export interface ListOps<T extends { id: string }> {
 export class FinanceStore {
   private readonly store = inject(StorageService).bind<FinanceInputs>({
     key: 'finance',
-    version: 5,
+    version: 6,
     defaults: DEFAULT_FINANCE_INPUTS,
     migrate: (raw) => {
       const data = raw as FinanceInputs;
@@ -70,6 +73,32 @@ export class FinanceStore {
       // v4 → v5: seed the Saving pillar's emergency-fund multiplier.
       if (!out.saving) {
         out = { ...out, saving: { emergencyMultiplier: DEFAULT_EMERGENCY_MULTIPLIER } };
+      }
+      // v5 → v6: flat EMI line items become structured Loan entities.
+      //
+      // This RESHAPES ONLY — no amount is ever recomputed. `period` comes across
+      // untouched, so `deriveFinance` returns exactly the same totalNeeds,
+      // minimumIncome and emergencyTarget before and after. A yearly-billed loan
+      // stays yearly; the Forecast tab asks the user to convert it, showing the
+      // arithmetic, rather than rewriting their figure behind their back.
+      const loanBucket = out.loan as { emis?: LineItem[]; loans?: Loan[] } | undefined;
+      if (!loanBucket?.loans) {
+        const legacy = loanBucket?.emis ?? [];
+        out = {
+          ...out,
+          loan: {
+            loans: legacy.map((item) => ({
+              id: item.id ?? makeId('loan'),
+              name: item.type ?? '',
+              emi: Number.isFinite(item.value) ? item.value : 0,
+              ...(item.period ? { period: item.period } : {}),
+              principal: null,
+              annualRatePct: null,
+              startDate: null,
+              kind: 'other' as const,
+            })),
+          },
+        };
       }
       return out;
     },
@@ -139,11 +168,18 @@ export class FinanceStore {
     (i, items) => ({ ...i, spending: { ...i.spending, wants: items } }),
   );
 
-  // ---- Future pillars (modelled now; UIs are Coming soon) ----
-  readonly loanEmis = this.list<LineItem>(
-    (i) => i.loan.emis,
-    (i, items) => ({ ...i, loan: { emis: items } }),
+  // ---- Loan pillar ----
+  readonly loans = this.list<Loan>(
+    (i) => i.loan.loans,
+    (i, items) => ({ ...i, loan: { loans: items } }),
   );
+  /** Restate a yearly-billed loan as its monthly twelfth (explicit user action only). */
+  convertLoanToMonthly(id: string): void {
+    this.store.update((i) => ({
+      ...i,
+      loan: { loans: i.loan.loans.map((l) => (l.id === id ? toMonthlyBilling(l) : l)) },
+    }));
+  }
   // ---- Saving pillar ----
   readonly emergencyMultiplier = computed(() => this.inputs().saving.emergencyMultiplier);
   setEmergencyMultiplier(multiplier: EmergencyMultiplier): void {

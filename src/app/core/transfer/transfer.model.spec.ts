@@ -89,7 +89,7 @@ describe('summarize', () => {
   it('flags matching, older, newer, and unknown collections', () => {
     const s = summarize(
       payload({
-        finance: envelope(5, { income: { gross: 1 }, spending: { needs: [{}], wants: [{}, {}] } }),
+        finance: envelope(6, { income: { gross: 1 }, spending: { needs: [{}], wants: [{}, {}] } }),
         profile: envelope(1, { name: 'Ada', photo: null }),
         'tax-config': envelope(3, {}), // newer than this build (current 1)
         mystery: envelope(1, {}), // unknown collection
@@ -107,7 +107,7 @@ describe('summarize', () => {
   it('marks an older finance document as will-migrate', () => {
     const s = summarize(payload({ finance: envelope(2, {}) }));
     expect(s.collections[0].status).toBe('will-migrate');
-    expect(s.collections[0].currentVersion).toBe(5);
+    expect(s.collections[0].currentVersion).toBe(6);
   });
 
   it('flags a newer top-level schema as unsupported', () => {
@@ -116,9 +116,7 @@ describe('summarize', () => {
   });
 
   it('importableKeys excludes newer-unsupported collections', () => {
-    const s = summarize(
-      payload({ finance: envelope(5, {}), 'tax-config': envelope(9, {}) }),
-    );
+    const s = summarize(payload({ finance: envelope(5, {}), 'tax-config': envelope(9, {}) }));
     expect(importableKeys(s)).toEqual(['finance']);
   });
 });

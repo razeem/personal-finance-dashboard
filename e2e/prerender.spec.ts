@@ -49,6 +49,6 @@ test('app hydrates and stays interactive after prerender', async ({ page }) => {
   await page.getByTestId('nav-loan').click();
   await expect(page).toHaveURL(/\/loan$/);
   await page.getByTestId('loan-add').click();
-  await page.getByTestId('loan-value').first().fill('15000');
+  await page.getByTestId('loan-emi').first().fill('15000');
   await expect(page.getByTestId('loan-total-tile')).toContainText('15,000');
 });
