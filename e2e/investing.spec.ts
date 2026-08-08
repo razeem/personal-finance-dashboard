@@ -81,6 +81,30 @@ test.describe('Inflation adjuster', () => {
   });
 });
 
+test.describe('Contributions', () => {
+  test('a yearly contribution counts as its monthly twelfth', async ({ page }) => {
+    await page.goto('/investing');
+
+    await page.getByTestId('invest-voluntary-add').click();
+    await page.getByTestId('invest-voluntary-type').last().fill('PPF');
+    await page.getByTestId('invest-voluntary-value').last().fill('120000');
+
+    // Monthly by default: the whole ₹1,20,000 lands in the monthly total
+    // (on top of the ₹1,850 default EPF).
+    await expect(page.getByTestId('investing-total-tile')).toContainText('1,21,850');
+
+    await page
+      .getByTestId('invest-voluntary-period')
+      .last()
+      .getByRole('radio', { name: '/yr' })
+      .click();
+
+    // Flipped to yearly → ₹10,000/mo, and the list footer agrees with the tile.
+    await expect(page.getByTestId('investing-total-tile')).toContainText('11,850');
+    await expect(page.getByTestId('invest-voluntary-total')).toContainText('10,000');
+  });
+});
+
 test.describe('NPS calculator', () => {
   test('projects the corpus, lumpsum and pension, then discounts them to today', async ({
     page,

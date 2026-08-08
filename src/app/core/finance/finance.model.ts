@@ -278,8 +278,10 @@ export function deriveFinance(
   const totalNeeds = sumLineItems(inputs.spending.needs) + totalLoanEmis; // EMIs roll into Needs
   const totalWants = sumLineItems(inputs.spending.wants);
   const totalInsurance = sumLineItemsMonthly(inputs.insurance.premiums); // period-aware (yearly ÷ 12)
-  const mandatoryInvestments = sumLineItems(inputs.investing.mandatory);
-  const discretionaryInvestments = sumLineItems(inputs.investing.voluntary);
+  // Period-aware too: a yearly SIP/PPF top-up counts as its monthly twelfth, so the
+  // list footers, the pillar tile and the dashboard all agree on one number.
+  const mandatoryInvestments = sumLineItemsMonthly(inputs.investing.mandatory);
+  const discretionaryInvestments = sumLineItemsMonthly(inputs.investing.voluntary);
   const totalInvestments = mandatoryInvestments + discretionaryInvestments;
 
   // Tax is computed on the ANNUAL gross, then brought back to a monthly figure.

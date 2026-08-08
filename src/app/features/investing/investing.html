@@ -25,33 +25,35 @@
 
         <app-section-card
           title="Mandatory"
-          eyebrow="Owned here · monthly · → Living"
+          eyebrow="Owned here · → Living"
           icon="lock"
-          subtitle="Statutory retirement contributions (EPF, NPS). Counted under Living. EPF defaults to ₹1,850."
+          subtitle="Statutory retirement contributions (EPF, NPS). Counted under Living. EPF defaults to ₹1,850. Yearly amounts are counted as their monthly twelfth."
         >
           <app-line-item-list
             [ops]="mandatory"
             typeLabel="Instrument"
-            valueLabel="Amount / month"
+            valueLabel="Amount"
             addLabel="Add mandatory"
             emptyText="No mandatory contributions."
             testid="invest-mandatory"
+            [allowPeriod]="true"
           />
         </app-section-card>
 
         <app-section-card
           title="Voluntary"
-          eyebrow="Owned here · monthly · → Growth & Freedom"
+          eyebrow="Owned here · → Growth & Freedom"
           icon="rocket_launch"
-          subtitle="Extra investments you choose — mutual funds, stocks, PPF. Counted under Growth & Freedom."
+          subtitle="Extra investments you choose — mutual funds, stocks, PPF. Counted under Growth & Freedom. Yearly amounts are counted as their monthly twelfth."
         >
           <app-line-item-list
             [ops]="voluntary"
             typeLabel="Instrument"
-            valueLabel="Amount / month"
+            valueLabel="Amount"
             addLabel="Add voluntary"
             emptyText="No voluntary investments yet."
             testid="invest-voluntary"
+            [allowPeriod]="true"
           />
         </app-section-card>
       </div>

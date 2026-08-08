@@ -143,6 +143,26 @@ describe('deriveFinance (monthly inputs, annualised tax)', () => {
     expect(withYearly.allocation.total - without.allocation.total).toBeCloseTo(3_000, 5);
   });
 
+  // Investments carry the same per-item period as insurance/EMIs, so the pillar's
+  // list footer (always period-aware) can never disagree with the derived totals.
+  it('treats investment contributions as period-aware (yearly ÷ 12)', () => {
+    const d = deriveFinance({
+      ...inputs,
+      investing: {
+        mandatory: [makeLineItem('EPF', 24_000, 'yearly')], // ₹2,000/mo
+        voluntary: [makeLineItem('PPF', 150_000, 'yearly')], // ₹12,500/mo
+      },
+    });
+
+    expect(d.mandatoryInvestments).toBe(2_000);
+    expect(d.discretionaryInvestments).toBe(12_500);
+    expect(d.totalInvestments).toBe(14_500);
+    // Mandatory lands in Living, voluntary in Growth & Freedom.
+    expect(d.allocation.living).toBe(52_000); // needs 40k + wants 10k + 2k
+    expect(d.allocation.growthFreedom).toBe(12_500);
+    expect(d.minimumMonthlyExpense).toBe(42_000); // needs 40k + mandatory 2k
+  });
+
   it('derives MONTHLY tax, net income, minimum income and surplus (old regime)', () => {
     const d = deriveFinance(inputs);
     expect(d.taxPayable).toBeCloseTo(13_650, 5); // 163,800 / 12

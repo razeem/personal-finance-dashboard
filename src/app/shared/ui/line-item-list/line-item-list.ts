@@ -78,7 +78,7 @@ import {
               [value]="item.period ?? 'monthly'"
               (change)="ops().update(item.id, { period: $event.value })"
               [attr.data-testid]="testid() + '-period'"
-              aria-label="Premium frequency"
+              aria-label="Payment frequency"
             >
               <mat-button-toggle value="monthly">/mo</mat-button-toggle>
               <mat-button-toggle value="yearly">/yr</mat-button-toggle>
