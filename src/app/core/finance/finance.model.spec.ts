@@ -112,6 +112,37 @@ describe('deriveFinance (monthly inputs, annualised tax)', () => {
     expect(d.allocation.total).toBe(62_000);
   });
 
+  // Insurance is usually billed yearly. The monthly budget must therefore see a
+  // premium as its twelfth — in BOTH places it lands: minimum income and Safety.
+  it('feeds a yearly insurance premium (÷ 12) into minimum income and the Safety bucket', () => {
+    const monthly = deriveFinance({
+      ...inputs,
+      insurance: { premiums: [makeLineItem('Term', 2_000)] }, // ₹2,000/mo
+    });
+    const yearly = deriveFinance({
+      ...inputs,
+      insurance: { premiums: [makeLineItem('Term', 24_000, 'yearly')] }, // same ₹2,000/mo
+    });
+
+    expect(yearly.totalInsurance).toBe(2_000);
+    expect(yearly.totalInsurance).toBe(monthly.totalInsurance);
+    // Safety = insurance + short-term savings (5,000).
+    expect(yearly.allocation.safety).toBe(7_000);
+    expect(yearly.minimumIncome).toBeCloseTo(monthly.minimumIncome, 5);
+  });
+
+  it('raises minimum income and Safety by exactly the premium added', () => {
+    const without = deriveFinance({ ...inputs, insurance: { premiums: [] } });
+    const withYearly = deriveFinance({
+      ...inputs,
+      insurance: { premiums: [makeLineItem('Health', 36_000, 'yearly')] }, // ₹3,000/mo
+    });
+
+    expect(withYearly.minimumIncome - without.minimumIncome).toBeCloseTo(3_000, 5);
+    expect(withYearly.allocation.safety - without.allocation.safety).toBeCloseTo(3_000, 5);
+    expect(withYearly.allocation.total - without.allocation.total).toBeCloseTo(3_000, 5);
+  });
+
   it('derives MONTHLY tax, net income, minimum income and surplus (old regime)', () => {
     const d = deriveFinance(inputs);
     expect(d.taxPayable).toBeCloseTo(13_650, 5); // 163,800 / 12
@@ -141,8 +172,12 @@ describe('sumLineItems — edge cases', () => {
 
 describe('icerScore — edge cases', () => {
   it('returns the min and max cleanly', () => {
-    expect(icerScore({ id: 'a', name: '', interest: 1, capability: 1, effortlessness: 1, return: 1 })).toBe(1);
-    expect(icerScore({ id: 'b', name: '', interest: 5, capability: 5, effortlessness: 5, return: 5 })).toBe(5);
+    expect(
+      icerScore({ id: 'a', name: '', interest: 1, capability: 1, effortlessness: 1, return: 1 }),
+    ).toBe(1);
+    expect(
+      icerScore({ id: 'b', name: '', interest: 5, capability: 5, effortlessness: 5, return: 5 }),
+    ).toBe(5);
   });
 });
 
