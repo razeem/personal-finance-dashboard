@@ -19,13 +19,20 @@ const PLAIN: ChartOptions = {
 };
 
 describe('niceCeil', () => {
-  it('rounds up to 1, 2, 2.5 or 5 times a power of ten', () => {
+  it('rounds up to the nearest readable rung', () => {
     expect(niceCeil(1)).toBe(1);
     expect(niceCeil(1.4)).toBe(2);
     expect(niceCeil(2.4)).toBe(2.5);
-    expect(niceCeil(3)).toBe(5);
+    expect(niceCeil(2.6)).toBe(3);
+    expect(niceCeil(3.5)).toBe(4);
     expect(niceCeil(57_431)).toBe(100_000);
     expect(niceCeil(23_000)).toBe(25_000);
+  });
+
+  it('gives a round figure its own axis rather than the next rung up', () => {
+    // A ₹30L loan should get a ₹30L axis, not ₹50L.
+    expect(niceCeil(3_000_000)).toBe(3_000_000);
+    expect(niceCeil(4_000_000)).toBe(4_000_000);
   });
 
   it('is a no-op for zero and nonsense', () => {
@@ -44,7 +51,7 @@ describe('valueDomain', () => {
 
   it('extends below zero only when the data does', () => {
     const { min, max } = valueDomain([[-3_000, 8_000]]);
-    expect(min).toBe(-5_000);
+    expect(min).toBe(-3_000);
     expect(max).toBe(10_000);
   });
 
@@ -60,7 +67,7 @@ describe('valueDomain', () => {
       ],
       true,
     );
-    expect(grouped.max).toBe(5); // tallest single bar is 4 → nice 5
+    expect(grouped.max).toBe(4); // tallest single bar is 4, already a rung
     expect(stacked.max).toBe(10); // tallest column is 7 → nice 10
   });
 

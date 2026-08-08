@@ -116,17 +116,20 @@ export interface BarChart extends ChartFrame {
 // --- Scales -----------------------------------------------------------------
 
 /**
- * Round a value up to a readable axis maximum: 1, 2, 2.5, 5 or 10 times a power
- * of ten. Keeps gridline labels as round numbers (₹1,00,000 rather than
- * ₹57,431). The 10× rung matters — without it anything above 5× the magnitude
- * would round *down* and the tallest bar would overflow the plot area.
+ * Rungs the axis maximum may land on, as multiples of a power of ten. Fine
+ * enough that a ₹30L loan gets a ₹30L axis rather than a ₹50L one — a chart
+ * using 60% of its height reads as a chart that has been left half empty. The
+ * 10 rung is load-bearing: without it anything above 5× the magnitude would
+ * round *down* and the tallest point would overflow the plot area.
  */
+const NICE_STEPS = [1, 2, 2.5, 3, 4, 5, 10] as const;
+
+/** Round a value up to the nearest readable axis maximum. */
 export function niceCeil(value: number): number {
   if (!Number.isFinite(value) || value <= 0) return 0;
   const magnitude = 10 ** Math.floor(Math.log10(value));
   const normalised = value / magnitude;
-  const step =
-    normalised <= 1 ? 1 : normalised <= 2 ? 2 : normalised <= 2.5 ? 2.5 : normalised <= 5 ? 5 : 10;
+  const step = NICE_STEPS.find((candidate) => normalised <= candidate) ?? 10;
   return step * magnitude;
 }
 

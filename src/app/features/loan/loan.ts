@@ -9,11 +9,21 @@ import { SectionCard } from '../../shared/ui/section-card/section-card';
 import { StatTile } from '../../shared/ui/stat-tile/stat-tile';
 import { EmiCalculator } from './emi-calculator';
 import { LoanList } from './loan-list';
+import { LoanForecast } from './loan-forecast';
 
 @Component({
   selector: 'app-loan',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [InrPipe, MatTabsModule, PageHeader, SectionCard, StatTile, LoanList, EmiCalculator],
+  imports: [
+    InrPipe,
+    MatTabsModule,
+    PageHeader,
+    SectionCard,
+    StatTile,
+    LoanList,
+    LoanForecast,
+    EmiCalculator,
+  ],
   templateUrl: './loan.html',
 })
 export class Loan {
@@ -24,7 +34,7 @@ export class Loan {
   protected readonly derived = this.store.derived;
 
   // ---- Deep-linkable tabs (?tab=loans|calculator) ----
-  private readonly tabSlugs = ['loans', 'calculator'];
+  private readonly tabSlugs = ['loans', 'forecast', 'calculator'];
   private readonly queryParams = toSignal(this.route.queryParamMap, {
     initialValue: this.route.snapshot.queryParamMap,
   });

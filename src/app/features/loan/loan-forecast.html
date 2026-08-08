@@ -1,0 +1,204 @@
+@if (!allLoans().length) {
+  <div class="pt-5">
+    <app-section-card
+      title="Nothing to forecast yet"
+      eyebrow="Needs a loan"
+      icon="account_balance"
+      subtitle="Declare a loan under My loans, with the balance still outstanding and its interest rate, and this tab will show you when you'd be free of it."
+    >
+      <a mat-stroked-button routerLink="/loan" [queryParams]="{ tab: 'loans' }">
+        <mat-icon>arrow_forward</mat-icon>
+        Go to My loans
+      </a>
+    </app-section-card>
+  </div>
+} @else {
+  <div class="flex flex-col gap-5 pt-5">
+    <!--
+      Loans that can't be forecast are listed, not hidden — a loan silently
+      vanishing from this tab is worse than one that says what it needs.
+    -->
+    @if (incomplete().length) {
+      <app-section-card
+        title="These loans need a little more"
+        eyebrow="Not forecastable yet"
+        icon="edit_note"
+        subtitle="Forecasting works on a monthly reducing-balance schedule, so each loan needs a balance, a rate and a monthly instalment."
+      >
+        <ul class="m-0 flex list-none flex-col gap-2 p-0">
+          @for (loan of incomplete(); track loan.id) {
+            <li
+              class="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[0.88rem]"
+              [attr.data-testid]="'forecast-incomplete-' + loan.id"
+            >
+              <strong>{{ loan.name || 'Unnamed loan' }}</strong>
+              <span class="text-[var(--mat-sys-on-surface-variant)]">
+                needs {{ gapsFor(loan) }}
+              </span>
+            </li>
+          }
+        </ul>
+        <div class="mt-3">
+          <a
+            mat-stroked-button
+            routerLink="/loan"
+            [queryParams]="{ tab: 'loans' }"
+            data-testid="forecast-complete-link"
+          >
+            <mat-icon>edit</mat-icon>
+            Complete them
+          </a>
+        </div>
+      </app-section-card>
+    }
+
+    @if (selected(); as loan) {
+      <app-section-card
+        title="What if you paid more?"
+        eyebrow="Scratchpad · not saved"
+        icon="savings"
+        subtitle="Prepayments shorten the loan; they don't lower the instalment. That's what makes them worth doing."
+      >
+        <div actions>
+          @if (ready().length > 1) {
+            <mat-select
+              class="min-w-[12rem]"
+              [ngModel]="loan.id"
+              (ngModelChange)="selectedId.set($event)"
+              data-testid="forecast-loan-select"
+            >
+              @for (option of ready(); track option.id) {
+                <mat-option [value]="option.id">{{ option.name || 'Unnamed loan' }}</mat-option>
+              }
+            </mat-select>
+          }
+        </div>
+
+        <div class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
+          <!-- Inputs, left -->
+          <div class="flex flex-col gap-5">
+            <app-slider-field
+              label="Raise the instalment each year"
+              [(value)]="stepUpPct"
+              [min]="STEP_UP.min"
+              [max]="STEP_UP.max"
+              [step]="STEP_UP.step"
+              suffix="%"
+              [chars]="4"
+              hint="A yearly step-up, the way a salary rises."
+              testid="forecast-stepup"
+            />
+
+            <div class="flex flex-col gap-1">
+              <app-slider-field
+                label="Prepay each year"
+                [(value)]="lumpSum"
+                [min]="LUMP.min"
+                [max]="LUMP.max"
+                [step]="LUMP.step"
+                prefix="₹"
+                [chars]="9"
+                testid="forecast-lump"
+              />
+              @if (recentSurplus() > 0) {
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="text-xs text-[var(--mat-sys-on-surface-variant)]">
+                    Your last {{ surplusMonths() }} tracked
+                    {{ surplusMonths() === 1 ? 'month' : 'months' }} left over
+                    <strong class="app-num">{{ recentSurplus() | inr }}</strong> a month.
+                  </span>
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    (click)="useSurplus()"
+                    data-testid="forecast-use-surplus"
+                  >
+                    Use that
+                  </button>
+                </div>
+              }
+            </div>
+
+            <dl class="m-0 flex flex-col gap-1 text-sm">
+              <div class="flex justify-between gap-3">
+                <dt class="text-[var(--mat-sys-on-surface-variant)]">Outstanding</dt>
+                <dd class="app-num m-0 font-semibold" data-testid="forecast-outstanding">
+                  {{ loan.principal | inr }}
+                </dd>
+              </div>
+              <div class="flex justify-between gap-3">
+                <dt class="text-[var(--mat-sys-on-surface-variant)]">Instalment</dt>
+                <dd class="app-num m-0 font-semibold">{{ loan.emi | inr }}/mo</dd>
+              </div>
+              <div class="flex justify-between gap-3">
+                <dt class="text-[var(--mat-sys-on-surface-variant)]">Interest</dt>
+                <dd class="app-num m-0 font-semibold">{{ loan.annualRatePct }}% p.a.</dd>
+              </div>
+            </dl>
+          </div>
+
+          <!-- Results, right -->
+          <div class="flex flex-col gap-4">
+            <div class="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-3">
+              @for (row of comparison(); track row.label) {
+                <div
+                  class="flex flex-col gap-1 rounded-[var(--r-control)] border p-3"
+                  [class.border-[var(--border)]]="$index !== 0"
+                  [style.border-color]="$index === 0 ? 'var(--mat-sys-outline)' : null"
+                  [attr.data-testid]="'forecast-card-' + $index"
+                >
+                  <span
+                    class="text-[0.72rem] font-semibold tracking-wide uppercase text-[var(--mat-sys-on-surface-variant)]"
+                  >
+                    {{ row.label }}
+                  </span>
+                  @if (row.forecast.neverPaysOff) {
+                    <strong class="text-[0.95rem]">Never clears</strong>
+                    <span class="text-xs text-[var(--mat-sys-on-surface-variant)]">
+                      The instalment doesn't cover the interest.
+                    </span>
+                  } @else {
+                    <strong class="app-num text-[1.15rem]">
+                      {{ monthLabelOf(row.forecast.debtFreeMonth) }}
+                    </strong>
+                    <span class="app-num text-xs text-[var(--mat-sys-on-surface-variant)]">
+                      {{ tenure(row.forecast.months) }} · {{ row.forecast.totalInterest | inr }}
+                      interest
+                    </span>
+                    @if (row.interestSaved > 0) {
+                      <span
+                        class="app-num text-xs font-semibold text-[var(--mat-sys-primary)]"
+                        [attr.data-testid]="'forecast-saved-' + $index"
+                      >
+                        saves {{ row.interestSaved | inr }} · {{ tenure(row.monthsSaved) }} sooner
+                      </span>
+                    }
+                  }
+                </div>
+              }
+            </div>
+
+            <div>
+              <h3 class="mt-0 mb-2 text-[0.9rem] font-semibold">Balance over time</h3>
+              <app-spark-chart
+                kind="line"
+                [series]="curves()"
+                [labels]="curveLabels()"
+                [formatTick]="formatAxis()"
+                [fill]="false"
+                testid="forecast-chart"
+              />
+            </div>
+          </div>
+        </div>
+      </app-section-card>
+    } @else {
+      <app-section-card
+        title="No loan is ready to forecast"
+        eyebrow="Fill in the gaps"
+        icon="info"
+        subtitle="Add the outstanding balance and interest rate to a loan above and its projection appears here."
+      />
+    }
+  </div>
+}
