@@ -161,11 +161,22 @@
             }
             <li class="breakdown__row breakdown__row--total">
               <span class="breakdown__label">Minimum income</span>
-              <span class="breakdown__amount app-num">
+              <span class="breakdown__amount app-num" data-testid="income-minimum-total">
                 {{ derived().minimumIncome | inr }}
               </span>
             </li>
           </ul>
+          @if (derived().minimumIncomeRaw < 0) {
+            <p
+              class="mt-3 mb-0 text-[0.85rem] leading-snug text-[var(--mat-sys-on-surface-variant)]"
+              data-testid="income-minimum-floored"
+            >
+              The rows above come to
+              <strong class="app-num">{{ derived().minimumIncomeRaw | inr }}</strong> — your tax
+              exceeds everything you've declared spending. Minimum income is floored at ₹0; declare
+              your Needs, Wants and premiums for a real figure.
+            </p>
+          }
         </app-section-card>
       </div>
     </mat-tab>

@@ -245,3 +245,47 @@ describe('deriveFinance — edge cases', () => {
     expect(d.netIncome).toBe(50_000); // monthly, no tax
   });
 });
+
+// The formula subtracts tax, so a barely-declared model on a taxed salary drives
+// the raw minimum below zero — which used to make `surplus` exceed `netIncome`
+// (the live dashboard once showed ₹98,150 spare out of ₹86,350 take-home).
+describe('deriveFinance — minimum income is floored at zero', () => {
+  const barelyDeclared: FinanceInputs = {
+    ...DEFAULT_FINANCE_INPUTS,
+    // ₹1,00,000/mo → ₹1,63,800/yr old-regime tax = ₹13,650/mo…
+    income: { gross: 100_000, shortTermSavings: 0, months: makeMonths(100_000) },
+    // …against only the default ₹1,850 EPF as an outgoing.
+    spending: { needs: [], wants: [] },
+    loan: { emis: [] },
+    insurance: { premiums: [] },
+    investing: { mandatory: [makeLineItem('EPF', 1_850)], voluntary: [] },
+    tax: { regime: 'old', deductions: DEFAULT_FINANCE_INPUTS.tax.deductions },
+  };
+
+  it('keeps the unclamped formula available as minimumIncomeRaw', () => {
+    const d = deriveFinance(barelyDeclared);
+    expect(d.minimumIncomeRaw).toBeCloseTo(1_850 - 13_650, 5); // −11,800
+  });
+
+  it('clamps minimumIncome at 0 instead of reporting a negative need', () => {
+    const d = deriveFinance(barelyDeclared);
+    expect(d.minimumIncome).toBe(0);
+  });
+
+  it('never lets surplus exceed net income', () => {
+    const d = deriveFinance(barelyDeclared);
+    expect(d.netIncome).toBeCloseTo(86_350, 5);
+    expect(d.surplus).toBeCloseTo(86_350, 5); // was 98,150 before the clamp
+    expect(d.surplus).toBeLessThanOrEqual(d.netIncome);
+  });
+
+  it('leaves a positive minimum untouched (raw === clamped)', () => {
+    const d = deriveFinance({
+      ...barelyDeclared,
+      spending: { needs: [li(40_000)], wants: [li(10_000)] },
+    });
+    expect(d.minimumIncomeRaw).toBeGreaterThan(0);
+    expect(d.minimumIncome).toBe(d.minimumIncomeRaw);
+    expect(d.surplus).toBeLessThan(d.netIncome);
+  });
+});

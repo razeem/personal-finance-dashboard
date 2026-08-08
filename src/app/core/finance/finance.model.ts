@@ -123,6 +123,14 @@ export interface DerivedFinance {
   /** Monthly tax (`taxAnnual / 12`) — used in the monthly budget figures below. */
   taxPayable: number;
   netIncome: number;
+  /**
+   * The literal spec formula, unclamped: `Needs + Wants + Savings + Insurance +
+   * Investments − Tax`. Goes negative when the tax subtracted exceeds the
+   * outgoings above it (a barely-declared model on a taxed salary). Exposed so
+   * the Income breakdown can still add up to what it lists.
+   */
+  minimumIncomeRaw: number;
+  /** `minimumIncomeRaw` floored at 0 — you can never need less than nothing. */
   minimumIncome: number;
   surplus: number;
   /**
@@ -291,8 +299,13 @@ export function deriveFinance(
   const netIncome = gross - taxPayable;
 
   // Literal spec formula (subtracts tax); all terms monthly.
-  const minimumIncome =
+  const minimumIncomeRaw =
     totalNeeds + totalWants + shortTermSavings + totalInsurance + totalInvestments - taxPayable;
+  // …but floored at 0. Subtracting tax can drive the raw figure negative when the
+  // outgoings above it are barely declared, and a negative minimum would inflate
+  // `surplus` past `netIncome` — the dashboard would claim you have more spare
+  // cash than you actually take home.
+  const minimumIncome = Math.max(0, minimumIncomeRaw);
 
   // Emergency-fund basis: what it costs to merely keep running for a month —
   // needs (spending) + loan EMIs (both in totalNeeds) + mandatory investments.
@@ -321,6 +334,7 @@ export function deriveFinance(
     taxAnnual,
     taxPayable,
     netIncome,
+    minimumIncomeRaw,
     minimumIncome,
     surplus: netIncome - minimumIncome,
     minimumMonthlyExpense,
