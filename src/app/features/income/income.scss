@@ -48,23 +48,37 @@ mat-form-field {
   font-size: 0.82rem;
   color: var(--mat-sys-on-surface-variant);
 }
-.months__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 0.35rem 1rem;
+/*
+ * Material lays the expansion header's title and description out in one row at a
+ * fixed height, which on a phone makes "Advanced · monthly breakdown" wrap into
+ * and over the "FY 2025-26 · ₹12,00,000/yr" description. Stack them below Tailwind's
+ * `sm`. Material internals + height tokens — not expressible as utilities.
+ */
+@media (max-width: 639.98px) {
+  .months {
+    --mat-expansion-header-collapsed-state-height: auto;
+    --mat-expansion-header-expanded-state-height: auto;
+  }
+  .months ::ng-deep .mat-expansion-panel-header {
+    padding: 0.7rem 1rem;
+  }
+  .months ::ng-deep .mat-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.1rem;
+  }
+  .months ::ng-deep mat-panel-title {
+    align-items: center;
+    margin-right: 0;
+    flex-grow: 0;
+  }
+  .months ::ng-deep mat-panel-description {
+    margin-right: 0;
+    flex-grow: 0;
+    font-size: 0.78rem;
+  }
 }
-.month-row {
-  display: grid;
-  grid-template-columns: 2.4rem minmax(0, 1fr) minmax(0, 1fr);
-  align-items: center;
-  gap: 0.4rem;
-}
-.month-row__name {
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--text-soft);
-}
+
 .months__total {
   display: flex;
   align-items: center;
