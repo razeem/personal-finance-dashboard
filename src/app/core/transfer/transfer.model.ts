@@ -58,13 +58,14 @@ export class TransferError extends Error {
 /**
  * Collections this build knows how to consume, with their current document
  * versions. KEEP IN SYNC with each store's `bind({ version })`:
- * `FinanceStore` (finance), `ProfileStore` (profile), `TaxConfigStore`
- * (tax-config), `AssumptionsStore` (assumptions), `PreferencesStore`
- * (preferences) — a version *lower* than the store's marks incoming documents
- * `newer-unsupported`, which silently skips them on import.
+ * `FinanceStore` (finance), `HistoryStore` (finance-history), `ProfileStore`
+ * (profile), `TaxConfigStore` (tax-config), `AssumptionsStore` (assumptions),
+ * `PreferencesStore` (preferences) — a version *lower* than the store's marks
+ * incoming documents `newer-unsupported`, which silently skips them on import.
  */
 export const KNOWN_COLLECTIONS: Record<string, { label: string; version: number }> = {
   finance: { label: 'Finance', version: 5 },
+  'finance-history': { label: 'Month history', version: 1 },
   profile: { label: 'Profile', version: 1 },
   'tax-config': { label: 'Tax rules', version: 1 },
   assumptions: { label: 'Assumptions', version: 1 },
@@ -203,6 +204,10 @@ function describe(key: string, data: unknown): string {
       const bits = [name || 'unnamed'];
       if (hasPhoto) bits.push('photo');
       return bits.join(', ');
+    }
+    case 'finance-history': {
+      const months = isRecord(data['months']) ? Object.keys(data['months']).length : 0;
+      return months ? `${months} month${months === 1 ? '' : 's'} tracked` : 'no months tracked';
     }
     case 'tax-config':
       return 'tax slabs & deductions';
