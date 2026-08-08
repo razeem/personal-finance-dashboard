@@ -51,7 +51,9 @@ src/app/
     finance/   finance.model.ts (types + pure deriveFinance), tax.model.ts (old/new regime, data-driven TaxConfig),
                emi.model.ts (pure EMI + amortization), inflation.model.ts (pure future-cost / present-value),
                nps.model.ts (pure NPS corpus → lumpsum + pension, incl. today's-money figures),
+               history.model.ts (pure month snapshots, YYYY-MM keys, Indian-FY ranges + aggregation),
                finance-store.ts (THE shared model — one binding, derived signals),
+               history-store.ts (month-by-month memory; auto rollover, flexible start),
                tax-config-store.ts (user-editable tax rulebook; FinanceStore reads it),
                assumptions-store.ts (user-editable inflation assumption; the calculators read it)
     profile/   profile.model.ts, profile-store.ts (shared: form + shell avatar)
@@ -61,7 +63,8 @@ src/app/
                finance-workbook.service.ts (whole-model .xlsx — the Dashboard "Export workbook")
     image/     image-compression.ts (canvas → WebP Blob)
   shared/ui/   stat-tile, section-card, pillar-card, coming-soon, line-item-list,
-               inline-prompt, rating-input, page-header, slider-field (calculator input: chip + slider)
+               inline-prompt, rating-input, page-header, slider-field (calculator input: chip + slider),
+               spark-chart (dependency-free SVG line/bar chart; pure geometry in spark-chart.model.ts)
   features/
     dashboard/  income/  spending/  saving/  loan/  insurance/  investing/  tax/
     settings/ (profile-form + tax-rules-form + assumptions-form + settings-dialog)
@@ -120,11 +123,11 @@ Every stored record is wrapped in a `StoredEnvelope` (`{ version, data, updatedA
 `FinanceStore` (`core/finance/finance-store.ts`) is the **single shared state** for the whole app. Every value is entered **exactly once**, in the pillar that owns it; every other pillar reads derived numbers — nothing is re-typed.
 
 - **Monthly by default**: income, spending, savings, insurance and investing are all entered **MONTHLY**. India tax is yearly, so `deriveFinance` annualises for the tax model and divides the annual tax back to a monthly figure — every budget number it returns (net, minimum, surplus, allocation) is monthly. `gross` is the _typical_ monthly base; **`annualGross`** is the actual sum of the **12-month salary breakdown** (`income.months`, Apr→Mar, each `{ base, bonus }`) — the tax basis. `setGross` **smart-fills** the breakdown (months still matching the old gross follow the new one; genuine overrides are kept).
-- **Ownership**: Income owns `gross`, `shortTermSavings`, the 12-month breakdown, goals, ideas; Spending owns `needs[]`/`wants[]`; **Insurance** owns `premiums[]` (per-item `period: monthly|yearly`, yearly ÷12); **Investing** owns `mandatory[]` (EPF/NPS, bucketed under Living) + `voluntary[]` (Growth & Freedom); **Loan** owns `emis[]`; **Saving** owns `emergencyMultiplier`; Tax owns `regime` + deductions. `LineItem` carries optional `period` and `mandatory`; `sumLineItemsMonthly` is period-aware.
+- **Ownership**: Income owns `gross`, `shortTermSavings`, the 12-month breakdown, goals, ideas; Spending owns `needs[]`/`wants[]`; **Insurance** owns `premiums[]` (per-item `period: monthly|yearly`, yearly ÷12); **Investing** owns `mandatory[]` (EPF/NPS, bucketed under Living) + `voluntary[]` (Growth & Freedom); **Loan** owns `emis[]`; **Saving** owns `emergencyMultiplier`; Tax owns `regime` + deductions. `LineItem` carries optional `period` and `mandatory`; `sumLineItemsMonthly` is period-aware. **Insurance, Loan and Investing all expose the per-row `/mo` `/yr` toggle** (`[allowPeriod]` on `app-line-item-list`) and `deriveFinance` sums all three period-aware — if you add the toggle anywhere new, make the matching total period-aware too, or the list footer will disagree with the pillar tile.
 - **Derived** (`deriveFinance`, pure + unit-tested): `totalNeeds` (spending **+ loan EMIs**), `totalWants`, `annualGross`, `taxAnnual`, monthly `taxPayable`, `netIncome`, `minimumIncome`, `surplus`, and the **spend-allocation** buckets `allocation.{living,safety,growthFreedom,total}` (Living = needs+wants+mandatory investments; Safety = insurance+savings; Growth&Freedom = discretionary investments).
 - **Spend allocation** (dashboard card): a draggable two-handle split bar sets the target ratio (default **75:15:10**, always sums 100 by construction — stored as `allocationTarget`), compared against actuals per bucket. `FinanceStore.setAllocationTarget`.
 - **Circular dependency** (Gross → Tax → Minimum): resolved by making **Gross the only entered value**; Tax and Minimum Income are both derived. Never back-solve gross from minimum.
-- **Minimum Income formula** is implemented literally (`Needs + Wants + Savings + Insurance + Investments − Tax`, monthly) in one place in `deriveFinance`.
+- **Minimum Income formula** is implemented literally (`Needs + Wants + Savings + Insurance + Investments − Tax`, monthly) in one place in `deriveFinance`. It is exposed twice: `minimumIncomeRaw` (the literal formula) and **`minimumIncome`, floored at 0**. Subtracting tax can drive the raw figure negative when outgoings are barely declared, and a negative minimum would make `surplus` exceed `netIncome`. `surplus` uses the clamped value; the Income breakdown shows the raw one when the floor bites, so its rows still add up.
 - **Persistence/migrations**: the `finance` doc is at **version 5** (`FinanceStore.bind`) — v1→v2 seeded the 12-month breakdown, v2→v3 the allocation target, v3→v4 split `investing.contributions` into `mandatory`/`voluntary`, v4→v5 seeded the Saving pillar's emergency multiplier. Bump + extend `migrate` when the shape changes, and keep `KNOWN_COLLECTIONS` in `core/transfer/transfer.model.ts` in step (a stale version there makes exported documents look `newer-unsupported` and silently skips them on import).
 - **Global export** lives in the **top bar** (`App.exportWorkbook`, `data-testid="dashboard-export"`), not the Dashboard body.
 - **Inline prompts**: when a pillar needs a value another owns but it's still empty, render `app-inline-prompt` linking to the owning pillar instead of a duplicate input.
@@ -132,6 +135,17 @@ Every stored record is wrapped in a `StoredEnvelope` (`{ version, data, updatedA
 Tax math lives in `core/finance/tax.model.ts` — pure `calculateOldRegimeTax` / `calculateNewRegimeTax` / `calculateTax` (clamped progressive slabs, caps, cess, 87A rebate). The rules are **data, not constants**: every function takes a `TaxConfig` (defaulting to `DEFAULT_TAX_CONFIG`, which ships **FY 2025-26 / Budget 2025** slabs — new regime is tax-free up to ₹12L via an 87A rebate capped at ₹60k). Keep the functions pure — components and unit tests depend on it.
 
 The config is **user-editable**: `TaxConfigStore` (`core/finance/tax-config-store.ts`, `providedIn:'root'`) binds a `tax-config` collection and exposes setters for slabs (add/remove/edit), standard deduction, rebate limit/amount, cess, and 80C/80D caps, plus `reset()` (restore shipped defaults). `FinanceStore.derived` reads `taxConfig.config()` so the **whole app recomputes** when rules change. The editor is the **"Tax rules" tab** in the Settings dialog (`features/settings/tax-rules-form.ts`). To update the shipped baseline for a new FY, edit `DEFAULT_TAX_CONFIG` in one place.
+
+## Month history (the tracker + charts)
+
+`FinanceStore` describes **one steady-state month**; `HistoryStore` (`core/finance/history-store.ts`, collection `finance-history` v1) remembers what the months **actually were**. The design decision: a month is a **snapshot of the shared model, not a transaction ledger** — the pillars already describe a month, so history freezes that description at rollover and trends fall out without anyone booking entries.
+
+- **Shape**: one document, a **sparse map keyed `YYYY-MM`** (`{ months, trackingStart, startMode }`). Sparse + one document is what makes the flexible start (`first-use` | `fy` | `custom`) a _setting_ rather than a third data model. Keys sort correctly as plain strings — rely on that instead of parsing.
+- **Rollover**: a self-destroying `effect` guarded on both stores' `ready()` (and `isPlatformBrowser` — prerender must not invent a snapshot) calls `ensureCurrentMonth()`. It freezes **only the single previous month** (the current one isn't over yet), and **never touches a `manual` or `backfill` snapshot**. `setStartMode` calls it too, so picking a start catches up immediately rather than waiting for the next load. Gaps are the user's to fill deliberately.
+- **`MonthBreakdown` is a partition of `expenses`** — `snapshotFromDerived` pulls loan EMIs back out of `totalNeeds`, or the stacked chart and the total would double-count them. Short-term savings are deliberately _not_ an expense, so `income − expenses` is what the month put aside. `applyEdit` always re-derives `expenses` from the breakdown so the two cannot drift.
+- **`scaleBreakdownTo`** backs the tracker's single "Spent" field: it corrects the _size_ of a month while keeping the _shape_ of its category split (everything lands in `needs` when there are no proportions to keep). Individual categories stay editable under "Split it out".
+- **UI**: the **History tab** on Spending (`?tab=history`, query-param tab pattern). Months are pre-filled by carrying the previous one forward and chipped "Carried over" until edited; the first edit marks them `manual`.
+- **Charts**: `shared/ui/spark-chart` — **no charting library**. All geometry is pure maths in `spark-chart.model.ts` (scales, `niceCeil` axis rounding, line paths, grouped/stacked bars), unit-tested without rendering; the component only emits SVG, like the EMI donut. It scales via `viewBox` (uniform — `preserveAspectRatio="none"` would stretch the text), so prerender and hydration agree. `aggregateByFy` rolls months into Indian financial years using the same Apr→Mar window as `fyKeyRange`; only recorded months are plotted, since a blank month would read as a real ₹0.
 
 ## Calculators (Loan · Investing)
 
@@ -143,12 +157,12 @@ Alongside the declaration pillars there are three **scratchpad calculators**. Th
 
 **The two automated fields** (nothing is typed twice):
 
-1. **Inflation rate** is _not_ a scratch input — it's the app-wide assumption in `AssumptionsStore` (`core/finance/assumptions-store.ts`, `assumptions` collection v1, default **6%**, bounds in `INFLATION_RANGE`). Both calculators read *and write* it, and it's editable in the **"Assumptions" tab** of the Settings dialog (`features/settings/assumptions-form.ts`); every real-terms figure recomputes live. Same idea as `TaxConfigStore`: shipped baseline + `reset()`.
+1. **Inflation rate** is _not_ a scratch input — it's the app-wide assumption in `AssumptionsStore` (`core/finance/assumptions-store.ts`, `assumptions` collection v1, default **6%**, bounds in `INFLATION_RANGE`). Both calculators read _and write_ it, and it's editable in the **"Assumptions" tab** of the Settings dialog (`features/settings/assumptions-form.ts`); every real-terms figure recomputes live. Same idea as `TaxConfigStore`: shipped baseline + `reset()`.
 2. **NPS monthly contribution** is seeded from the shared model — any Investing line item whose name matches `/\bnps\b/i` (mandatory or voluntary, period-aware via `sumLineItemsMonthly`). The seed runs once through a self-destroying `effect` guarded on `FinanceStore.ready()`; after that the slider is scratch, and a **"Use that"** button re-syncs.
 
 Slider/donut styling is shared, not per-component: the `.app-slider` and `.app-donut-seg` utilities in `styles.scss` (global, so no `::ng-deep` needed).
 
-**In-page tabs are deep-linkable**: Income (`?tab=minimum|goals|ideas`), Tax (`?tab=calculator|comparer`), Loan (`?tab=loans|calculator`) and Investing (`?tab=contributions|inflation|nps`) sync a `?tab=` query param to the `mat-tab-group` `selectedIndex` (via `toSignal(route.queryParamMap)` + `router.navigate(..., { replaceUrl: true })`). A query param (not a fragment or child routes) keeps tab components mounted so local state — e.g. the ICER sort snapshot — survives tab switches. The **ICER table sorts on a one-shot snapshot** (`order` signal set on header click), never a live `computed`, so editing a rating never reorders rows mid-edit.
+**In-page tabs are deep-linkable**: Income (`?tab=minimum|goals|ideas`), Tax (`?tab=calculator|comparer`), Loan (`?tab=loans|calculator`), Spending (`?tab=budget|history`) and Investing (`?tab=contributions|inflation|nps`) sync a `?tab=` query param to the `mat-tab-group` `selectedIndex` (via `toSignal(route.queryParamMap)` + `router.navigate(..., { replaceUrl: true })`). A query param (not a fragment or child routes) keeps tab components mounted so local state — e.g. the ICER sort snapshot — survives tab switches. The **ICER table sorts on a one-shot snapshot** (`order` signal set on header click), never a live `computed`, so editing a rating never reorders rows mid-edit.
 
 ## Cross-device data transfer (export / import)
 
