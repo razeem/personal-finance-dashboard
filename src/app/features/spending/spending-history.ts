@@ -5,11 +5,15 @@ import { MatExpansionModule } from '@angular/material/expansion';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { InrPipe } from '../../shared/inr-pipe';
 import { SectionCard } from '../../shared/ui/section-card/section-card';
 import { StatTile } from '../../shared/ui/stat-tile/stat-tile';
+import { SparkChart } from '../../shared/ui/spark-chart/spark-chart';
+import { Series } from '../../shared/ui/spark-chart/spark-chart.model';
 import { HistoryStore } from '../../core/finance/history-store';
 import {
+  aggregateByFy,
   MonthBreakdown,
   MonthKey,
   MonthSnapshot,
@@ -18,6 +22,8 @@ import {
   monthLabel,
   StartMode,
 } from '../../core/finance/history.model';
+import { PreferencesStore } from '../../core/preferences/preferences-store';
+import { formatInr } from '../../shared/inr-pipe';
 
 /** One month as the template needs it: the figures plus how they got there. */
 interface MonthRow {
@@ -56,17 +62,20 @@ const CATEGORIES: readonly { key: keyof MonthBreakdown; label: string }[] = [
     FormsModule,
     InrPipe,
     MatButtonModule,
+    MatButtonToggleModule,
     MatExpansionModule,
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
     SectionCard,
+    SparkChart,
     StatTile,
   ],
   templateUrl: './spending-history.html',
 })
 export class SpendingHistory {
   private readonly history = inject(HistoryStore);
+  private readonly prefs = inject(PreferencesStore);
 
   protected readonly categories = CATEGORIES;
   protected readonly needsStartMode = this.history.needsStartMode;
@@ -110,6 +119,63 @@ export class SpendingHistory {
   );
   protected readonly totalSaved = computed(() => this.totalIncome() - this.totalExpenses());
 
+  // ---- Trends -------------------------------------------------------------
+
+  /** Monthly or financial-year granularity for both charts. */
+  protected readonly grain = signal<'month' | 'fy'>('month');
+
+  private readonly fyTotals = computed(() => aggregateByFy(this.history.value()));
+
+  /** Only recorded months feed the charts — blanks would read as real zeroes. */
+  private readonly points = computed(() =>
+    this.grain() === 'fy'
+      ? this.fyTotals().map((fy) => ({
+          label: fy.label,
+          income: fy.income,
+          expenses: fy.expenses,
+          breakdown: fy.breakdown,
+        }))
+      : this.history.entries().map(([key, snapshot]) => ({
+          label: monthLabel(key),
+          income: snapshot.income,
+          expenses: snapshot.expenses,
+          breakdown: snapshot.breakdown,
+        })),
+  );
+
+  protected readonly chartLabels = computed(() => this.points().map((p) => p.label));
+  /** Charts need at least two points before a "trend" means anything. */
+  protected readonly hasTrend = computed(() => this.points().length >= 2);
+
+  protected readonly incomeVsExpenses = computed<Series[]>(() => [
+    { label: 'Income', values: this.points().map((p) => p.income) },
+    { label: 'Spent', values: this.points().map((p) => p.expenses) },
+  ]);
+
+  protected readonly breakdownSeries = computed<Series[]>(() =>
+    CATEGORIES.map((category) => ({
+      label: category.label,
+      values: this.points().map((p) => p.breakdown[category.key]),
+    })),
+  );
+
+  /** Compact rupee labels for the value axis — ₹1.2L beats ₹1,20,000 on an axis. */
+  protected readonly formatAxis = computed(() => {
+    const mode = this.prefs.numberFormat();
+    return (value: number): string => {
+      const abs = Math.abs(value);
+      if (mode === 'indian') {
+        if (abs >= 10_000_000) return `₹${trim(value / 10_000_000)}Cr`;
+        if (abs >= 100_000) return `₹${trim(value / 100_000)}L`;
+        if (abs >= 1_000) return `₹${trim(value / 1_000)}k`;
+      } else {
+        if (abs >= 1_000_000) return `₹${trim(value / 1_000_000)}M`;
+        if (abs >= 1_000) return `₹${trim(value / 1_000)}k`;
+      }
+      return formatInr(value, mode);
+    };
+  });
+
   protected start(mode: StartMode): void {
     this.history.setStartMode(mode, mode === 'custom' ? this.customStart() : undefined);
   }
@@ -151,4 +217,9 @@ export class SpendingHistory {
 function toAmount(value: string | number): number {
   const n = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/** One decimal, but only when it says something: 1.5L, not 2.0L. */
+function trim(value: number): string {
+  return value.toFixed(1).replace(/\.0$/, '');
 }

@@ -287,6 +287,69 @@ export function scaleBreakdownTo(breakdown: MonthBreakdown, total: number): Mont
   return { ...scaled, needs: round2(scaled.needs + (target - sumBreakdown(scaled))) };
 }
 
+/**
+ * One financial year's worth of months, summed. `key` is the FY's April month so
+ * it sorts chronologically; `label` is how it's written down in India.
+ */
+export interface FyTotals {
+  key: MonthKey;
+  label: string;
+  income: number;
+  expenses: number;
+  breakdown: MonthBreakdown;
+  /** How many months of the year actually have a snapshot. */
+  monthCount: number;
+}
+
+/** `FY 2026-27` for any month inside that financial year. */
+export function fyLabelOf(key: MonthKey): string {
+  const date = parseMonthKey(key);
+  if (!date) return key;
+  const startYear = date.getMonth() >= 3 ? date.getFullYear() : date.getFullYear() - 1;
+  return `FY ${startYear}-${String((startYear + 1) % 100).padStart(2, '0')}`;
+}
+
+/**
+ * Roll month snapshots up into Indian financial years, oldest first.
+ *
+ * Buckets come from `fyKeyRange`, so a year is defined by the same Apr→Mar
+ * window the rest of the app uses rather than by whatever months happen to be
+ * present. Partial years are included with their real `monthCount` — a year with
+ * three months tracked is honestly three months of spending, not a shortfall.
+ */
+export function aggregateByFy(state: HistoryState): FyTotals[] {
+  const byYear = new Map<MonthKey, FyTotals>();
+
+  for (const key of sortedKeys(state)) {
+    const date = parseMonthKey(key);
+    if (!date) continue;
+    const fyKey = fyKeyRange(date)[0];
+    const totals =
+      byYear.get(fyKey) ??
+      ({
+        key: fyKey,
+        label: fyLabelOf(key),
+        income: 0,
+        expenses: 0,
+        breakdown: { ...EMPTY_BREAKDOWN },
+        monthCount: 0,
+      } satisfies FyTotals);
+
+    const snapshot = state.months[key];
+    totals.income = round2(totals.income + snapshot.income);
+    totals.expenses = round2(totals.expenses + snapshot.expenses);
+    for (const category of Object.keys(EMPTY_BREAKDOWN) as (keyof MonthBreakdown)[]) {
+      totals.breakdown[category] = round2(
+        totals.breakdown[category] + (snapshot.breakdown[category] ?? 0),
+      );
+    }
+    totals.monthCount += 1;
+    byYear.set(fyKey, totals);
+  }
+
+  return [...byYear.values()].sort((a, b) => a.key.localeCompare(b.key));
+}
+
 /** Month keys present in `state`, ascending. */
 export function sortedKeys(state: HistoryState): MonthKey[] {
   return Object.keys(state.months).sort();

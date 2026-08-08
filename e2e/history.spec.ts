@@ -98,6 +98,42 @@ test.describe('Spending · month history', () => {
     await expect(page.getByTestId(`history-carried-${earlier}`)).toHaveCount(0);
   });
 
+  test('charts appear once there are two months to compare', async ({ page }) => {
+    await startTracking(page, 'fy');
+
+    // One recorded month is not a trend.
+    await expect(page.getByTestId('history-chart-income')).toHaveCount(0);
+
+    await page.getByTestId(`history-income-${monthKey(-1)}`).fill('100000');
+    await page.getByTestId(`history-income-${monthKey(-2)}`).fill('90000');
+
+    const chart = page.getByTestId('history-chart-income');
+    await expect(chart).toBeVisible();
+    // Dependency-free: it really is inline SVG, one point per recorded month.
+    await expect(chart.locator('svg')).toHaveCount(1);
+    await expect(page.getByTestId('history-chart-income-point-Income-0')).toBeVisible();
+    await expect(page.getByTestId('history-chart-income-point-Income-1')).toBeVisible();
+
+    // …and a stacked bar per month for the expense breakdown. Every category
+    // gets a segment; ones with nothing in them are simply zero-height.
+    await expect(page.getByTestId('history-chart-breakdown-bar-Needs-0')).toHaveCount(1);
+    await expect(page.getByTestId('history-chart-breakdown-bar-Tax-0')).toBeVisible();
+    await expect(page.getByTestId('history-chart-breakdown-bar-Tax-1')).toBeVisible();
+  });
+
+  test('the financial-year view rolls the months up into one column', async ({ page }) => {
+    await startTracking(page, 'fy');
+    await page.getByTestId(`history-income-${monthKey(-1)}`).fill('100000');
+    await page.getByTestId(`history-income-${monthKey(-2)}`).fill('90000');
+    await expect(page.getByTestId('history-chart-income')).toBeVisible();
+
+    await page.getByTestId('history-grain').getByRole('radio', { name: 'Financial year' }).click();
+
+    // Both months belong to one FY, so the line collapses to a single point.
+    await expect(page.getByTestId('history-chart-income-point-Income-0')).toBeVisible();
+    await expect(page.getByTestId('history-chart-income-point-Income-1')).toHaveCount(0);
+  });
+
   test('a month can be forgotten again', async ({ page }) => {
     await startTracking(page);
     const key = monthKey(-1);

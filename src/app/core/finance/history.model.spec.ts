@@ -1,7 +1,9 @@
 import { DEFAULT_FINANCE_INPUTS, deriveFinance, makeLineItem, makeMonths } from './finance.model';
 import {
+  aggregateByFy,
   applyEdit,
   carryForward,
+  fyLabelOf,
   DEFAULT_HISTORY,
   EMPTY_BREAKDOWN,
   fyKeyRange,
@@ -292,6 +294,76 @@ describe('scaleBreakdownTo', () => {
   it('leaves the original untouched', () => {
     scaleBreakdownTo(breakdown, 1);
     expect(breakdown.needs).toBe(20_000);
+  });
+});
+
+describe('aggregateByFy', () => {
+  const withBreakdown = (income: number, needs: number, wants: number): MonthSnapshot => ({
+    income,
+    expenses: needs + wants,
+    breakdown: { ...EMPTY_BREAKDOWN, needs, wants },
+    source: 'manual',
+  });
+
+  it('labels a financial year the Indian way', () => {
+    expect(fyLabelOf('2026-04')).toBe('FY 2026-27');
+    expect(fyLabelOf('2027-03')).toBe('FY 2026-27'); // still the same FY
+    expect(fyLabelOf('2027-04')).toBe('FY 2027-28');
+  });
+
+  it('sums months into their financial year', () => {
+    const totals = aggregateByFy({
+      ...DEFAULT_HISTORY,
+      months: {
+        '2026-04': withBreakdown(100, 40, 10),
+        '2026-05': withBreakdown(100, 40, 10),
+      },
+    });
+    expect(totals).toHaveLength(1);
+    expect(totals[0].label).toBe('FY 2026-27');
+    expect(totals[0].income).toBe(200);
+    expect(totals[0].expenses).toBe(100);
+    expect(totals[0].breakdown.needs).toBe(80);
+    expect(totals[0].monthCount).toBe(2);
+  });
+
+  it('splits at April, not January', () => {
+    const totals = aggregateByFy({
+      ...DEFAULT_HISTORY,
+      months: {
+        '2027-01': withBreakdown(10, 1, 0), // still FY 2026-27
+        '2027-03': withBreakdown(10, 1, 0), // last month of FY 2026-27
+        '2027-04': withBreakdown(10, 1, 0), // first month of FY 2027-28
+      },
+    });
+    expect(totals.map((t) => t.label)).toEqual(['FY 2026-27', 'FY 2027-28']);
+    expect(totals[0].monthCount).toBe(2);
+    expect(totals[1].monthCount).toBe(1);
+  });
+
+  it('returns years oldest first regardless of insertion order', () => {
+    const totals = aggregateByFy({
+      ...DEFAULT_HISTORY,
+      months: {
+        '2027-06': withBreakdown(1, 1, 0),
+        '2025-06': withBreakdown(1, 1, 0),
+        '2026-06': withBreakdown(1, 1, 0),
+      },
+    });
+    expect(totals.map((t) => t.key)).toEqual(['2025-04', '2026-04', '2027-04']);
+  });
+
+  it('reports a partial year honestly rather than padding it', () => {
+    const totals = aggregateByFy({
+      ...DEFAULT_HISTORY,
+      months: { '2026-04': withBreakdown(100, 40, 10) },
+    });
+    expect(totals[0].monthCount).toBe(1);
+    expect(totals[0].income).toBe(100);
+  });
+
+  it('has nothing to say about an empty history', () => {
+    expect(aggregateByFy(DEFAULT_HISTORY)).toEqual([]);
   });
 });
 

@@ -104,6 +104,51 @@
       />
     </div>
 
+    @if (hasTrend()) {
+      <app-section-card
+        title="Trends"
+        eyebrow="Recorded months only"
+        icon="show_chart"
+        subtitle="Only months you've actually recorded are plotted — a blank month would read as a real ₹0."
+      >
+        <div actions>
+          <mat-button-toggle-group
+            [value]="grain()"
+            (change)="grain.set($event.value)"
+            aria-label="Chart granularity"
+            data-testid="history-grain"
+          >
+            <mat-button-toggle value="month">Monthly</mat-button-toggle>
+            <mat-button-toggle value="fy">Financial year</mat-button-toggle>
+          </mat-button-toggle-group>
+        </div>
+
+        <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <div>
+            <h3 class="mt-0 mb-2 text-[0.9rem] font-semibold">Income vs spending</h3>
+            <app-spark-chart
+              kind="line"
+              [series]="incomeVsExpenses()"
+              [labels]="chartLabels()"
+              [formatTick]="formatAxis()"
+              testid="history-chart-income"
+            />
+          </div>
+          <div>
+            <h3 class="mt-0 mb-2 text-[0.9rem] font-semibold">Where it went</h3>
+            <app-spark-chart
+              kind="bar"
+              [stacked]="true"
+              [series]="breakdownSeries()"
+              [labels]="chartLabels()"
+              [formatTick]="formatAxis()"
+              testid="history-chart-breakdown"
+            />
+          </div>
+        </div>
+      </app-section-card>
+    }
+
     <app-section-card
       title="Month by month"
       eyebrow="Newest first"
