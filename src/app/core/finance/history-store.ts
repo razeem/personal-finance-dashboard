@@ -1,4 +1,4 @@
-import { computed, effect, inject, Injectable, PLATFORM_ID } from '@angular/core';
+import { computed, effect, inject, Injectable, PLATFORM_ID, signal } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { StorageService } from '../storage/storage.service';
 import { FinanceStore } from './finance-store';
@@ -10,10 +10,13 @@ import {
   HistoryState,
   isUserAuthored,
   latestBefore,
+  MonthBreakdown,
   MonthKey,
   MonthSnapshot,
   monthKey,
+  monthKeyRange,
   previousMonthKey,
+  scaleBreakdownTo,
   snapshotFromDerived,
   sortedKeys,
   StartMode,
@@ -37,6 +40,12 @@ export class HistoryStore {
   });
   private readonly finance = inject(FinanceStore);
   private readonly isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
+  /**
+   * The calendar horizon, captured once and refreshed by `ensureCurrentMonth`.
+   * Held as a signal (not read from `new Date()` inside a computed) so the
+   * derived month range stays pure and reproducible.
+   */
+  private readonly today = signal(new Date());
 
   readonly value = this.store.value;
   readonly ready = this.store.ready;
@@ -49,6 +58,20 @@ export class HistoryStore {
   readonly keys = computed(() => sortedKeys(this.value()));
   /** `[key, snapshot]` pairs, oldest first — what the tracker and charts iterate. */
   readonly entries = computed(() => this.keys().map((key) => [key, this.months()[key]] as const));
+
+  /**
+   * Every month from the tracking start to the current one, oldest first —
+   * including months with no snapshot yet, which the tracker shows as blanks to
+   * fill in. Empty until tracking has started.
+   */
+  readonly trackedRange = computed<MonthKey[]>(() => {
+    const start = this.trackingStart();
+    if (!start) return [];
+    const keys = new Set(monthKeyRange(start, monthKey(this.today())));
+    // A backfill can sit outside the range if it was added and the start moved on.
+    for (const key of this.keys()) keys.add(key);
+    return [...keys].sort();
+  });
 
   constructor() {
     // Roll the previous month over once both stores have hydrated, then stop
@@ -75,6 +98,7 @@ export class HistoryStore {
    * something to paper over with today's numbers.
    */
   ensureCurrentMonth(now: Date = new Date()): void {
+    this.today.set(now);
     const state = this.value();
     if (state.trackingStart === null) return;
 
@@ -95,6 +119,7 @@ export class HistoryStore {
    * A no-op once tracking has already started — the start month is set once.
    */
   setStartMode(mode: StartMode, customStart?: MonthKey, now: Date = new Date()): void {
+    this.today.set(now);
     const state = this.value();
     if (state.trackingStart !== null) return;
 
@@ -102,6 +127,9 @@ export class HistoryStore {
     if (!start) return;
 
     this.store.set({ ...state, startMode: mode, trackingStart: start });
+    // The constructor's rollover has already run and destroyed itself by now, so
+    // catch the previous month up here instead of waiting for the next app load.
+    this.ensureCurrentMonth(now);
   }
 
   /**
@@ -114,6 +142,22 @@ export class HistoryStore {
     const state = this.value();
     const base = state.months[key] ?? this.blankFor(key);
     this.writeMonth(key, applyEdit(base, patch, 'manual'));
+  }
+
+  /**
+   * Set one month's total spend, keeping the category split's proportions.
+   * The quick-entry path: the user corrects the size of the month, not its shape.
+   */
+  setMonthExpenses(key: MonthKey, total: number): void {
+    const base = this.months()[key] ?? this.blankFor(key);
+    this.setMonth(key, { breakdown: scaleBreakdownTo(base.breakdown, total) });
+  }
+
+  /** Set a single category within one month's breakdown. */
+  setMonthCategory(key: MonthKey, category: keyof MonthBreakdown, value: number): void {
+    const base = this.months()[key] ?? this.blankFor(key);
+    const amount = Number.isFinite(value) ? Math.max(0, value) : 0;
+    this.setMonth(key, { breakdown: { ...base.breakdown, [category]: amount } });
   }
 
   /**

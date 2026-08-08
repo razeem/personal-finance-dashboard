@@ -1,0 +1,243 @@
+@if (needsStartMode()) {
+  <!--
+    Asked exactly once. Until a start month exists there is nothing to track and
+    nothing to roll over, so this is the only thing the tab shows.
+  -->
+  <div class="pt-5">
+    <app-section-card
+      title="Where should tracking begin?"
+      eyebrow="Asked once"
+      icon="flag"
+      subtitle="Each month is frozen from what you've declared, then carried forward — you only correct what actually differed."
+    >
+      <div class="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-4">
+        <button
+          type="button"
+          class="flex flex-col items-start gap-1 rounded-[var(--r-control)] border border-[var(--border)] p-4 text-left transition-[var(--transition)] hover:border-[var(--mat-sys-primary)]"
+          (click)="start('first-use')"
+          data-testid="history-start-first-use"
+        >
+          <span class="flex items-center gap-2 font-semibold">
+            <mat-icon>play_arrow</mat-icon>
+            Start now
+          </span>
+          <span class="text-[0.82rem] text-[var(--mat-sys-on-surface-variant)]">
+            Begin at {{ thisMonthLabel() }} and build history from here.
+          </span>
+        </button>
+
+        <button
+          type="button"
+          class="flex flex-col items-start gap-1 rounded-[var(--r-control)] border border-[var(--border)] p-4 text-left transition-[var(--transition)] hover:border-[var(--mat-sys-primary)]"
+          (click)="start('fy')"
+          data-testid="history-start-fy"
+        >
+          <span class="flex items-center gap-2 font-semibold">
+            <mat-icon>event_repeat</mat-icon>
+            This financial year
+          </span>
+          <span class="text-[0.82rem] text-[var(--mat-sys-on-surface-variant)]">
+            Begin at {{ fyStartLabel() }} — every month of the current Indian FY.
+          </span>
+        </button>
+
+        <div
+          class="flex flex-col items-start gap-2 rounded-[var(--r-control)] border border-[var(--border)] p-4"
+        >
+          <span class="flex items-center gap-2 font-semibold">
+            <mat-icon>history</mat-icon>
+            Somewhere earlier
+          </span>
+          <mat-form-field appearance="outline" subscriptSizing="dynamic" class="w-full">
+            <mat-label>Start month</mat-label>
+            <input
+              matInput
+              type="month"
+              [ngModel]="customStart()"
+              (ngModelChange)="customStart.set($event)"
+              data-testid="history-custom-start"
+            />
+          </mat-form-field>
+          <button
+            mat-stroked-button
+            type="button"
+            (click)="start('custom')"
+            data-testid="history-start-custom"
+          >
+            Track from here
+          </button>
+        </div>
+      </div>
+    </app-section-card>
+  </div>
+} @else {
+  <div class="flex flex-col gap-5 pt-5">
+    <div class="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
+      <app-stat-tile
+        label="Months tracked"
+        [value]="recordedCount().toString()"
+        [hint]="'since ' + trackingStartLabel()"
+        icon="calendar_month"
+        data-testid="history-count-tile"
+      />
+      <app-stat-tile
+        label="Income recorded"
+        [value]="totalIncome() | inr"
+        hint="all tracked months"
+        icon="payments"
+        data-testid="history-income-tile"
+      />
+      <app-stat-tile
+        label="Spent"
+        [value]="totalExpenses() | inr"
+        hint="all tracked months"
+        icon="shopping_cart"
+        data-testid="history-expenses-tile"
+      />
+      <app-stat-tile
+        label="Put aside"
+        [value]="totalSaved() | inr"
+        [tone]="totalSaved() >= 0 ? 'positive' : 'negative'"
+        hint="income − spending"
+        icon="savings"
+        data-testid="history-saved-tile"
+      />
+    </div>
+
+    <app-section-card
+      title="Month by month"
+      eyebrow="Newest first"
+      icon="calendar_month"
+      subtitle="Figures carried over from the previous month until you correct them. Editing a month makes it yours — nothing overwrites it afterwards."
+    >
+      <div class="flex flex-col gap-2">
+        @for (row of rows(); track row.key) {
+          <div
+            class="rounded-[var(--r-control)] border border-[var(--border)] p-3"
+            [attr.data-testid]="'history-row-' + row.key"
+          >
+            <div class="mb-2 flex flex-wrap items-center gap-2">
+              <strong class="font-[var(--font-mono)] text-[0.95rem]">{{ row.label }}</strong>
+              @if (row.carried) {
+                <span
+                  class="rounded-full border border-[var(--border)] px-2 py-0.5 text-[0.68rem] font-semibold tracking-wide uppercase text-[var(--mat-sys-on-surface-variant)]"
+                  [attr.data-testid]="'history-carried-' + row.key"
+                >
+                  {{ row.blank ? 'Not recorded' : 'Carried over' }}
+                </span>
+              }
+              <span
+                class="ml-auto app-num text-[0.9rem]"
+                [style.color]="saved(row) < 0 ? 'var(--mat-sys-error)' : null"
+                [attr.data-testid]="'history-saved-' + row.key"
+              >
+                {{ saved(row) | inr }} put aside
+              </span>
+              @if (!row.blank) {
+                <button
+                  mat-icon-button
+                  type="button"
+                  aria-label="Forget this month"
+                  (click)="remove(row.key)"
+                  [attr.data-testid]="'history-remove-' + row.key"
+                >
+                  <mat-icon>delete_outline</mat-icon>
+                </button>
+              }
+            </div>
+
+            <div class="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
+              <mat-form-field appearance="outline" subscriptSizing="dynamic" class="min-w-0">
+                <mat-label>Income</mat-label>
+                <span matTextPrefix>₹&nbsp;</span>
+                <input
+                  matInput
+                  type="number"
+                  min="0"
+                  inputmode="numeric"
+                  [ngModel]="row.snapshot.income"
+                  (ngModelChange)="setIncome(row.key, $event)"
+                  [attr.data-testid]="'history-income-' + row.key"
+                />
+              </mat-form-field>
+              <mat-form-field appearance="outline" subscriptSizing="dynamic" class="min-w-0">
+                <mat-label>Spent</mat-label>
+                <span matTextPrefix>₹&nbsp;</span>
+                <input
+                  matInput
+                  type="number"
+                  min="0"
+                  inputmode="numeric"
+                  [ngModel]="row.snapshot.expenses"
+                  (ngModelChange)="setExpenses(row.key, $event)"
+                  [attr.data-testid]="'history-expenses-' + row.key"
+                />
+              </mat-form-field>
+            </div>
+
+            <mat-expansion-panel
+              class="history-split"
+              [attr.data-testid]="'history-split-' + row.key"
+            >
+              <mat-expansion-panel-header>
+                <mat-panel-title>Split it out</mat-panel-title>
+              </mat-expansion-panel-header>
+              <p class="mt-0 mb-3 text-[0.8rem] text-[var(--mat-sys-on-surface-variant)]">
+                Editing "Spent" above rescales these proportionally. Change one here to set it
+                exactly.
+              </p>
+              <div class="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-x-3 gap-y-1">
+                @for (category of categories; track category.key) {
+                  <mat-form-field appearance="outline" subscriptSizing="dynamic" class="min-w-0">
+                    <mat-label>{{ category.label }}</mat-label>
+                    <span matTextPrefix>₹&nbsp;</span>
+                    <input
+                      matInput
+                      type="number"
+                      min="0"
+                      inputmode="numeric"
+                      [ngModel]="row.snapshot.breakdown[category.key]"
+                      (ngModelChange)="setCategory(row.key, category.key, $event)"
+                      [attr.data-testid]="'history-cat-' + row.key + '-' + category.key"
+                    />
+                  </mat-form-field>
+                }
+              </div>
+            </mat-expansion-panel>
+          </div>
+        }
+      </div>
+    </app-section-card>
+
+    <app-section-card
+      title="Add an earlier month"
+      eyebrow="Backfill"
+      icon="history"
+      subtitle="Record a month from before you started tracking. It's marked as backfilled and never overwritten."
+    >
+      <div class="flex flex-wrap items-start gap-3">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Month</mat-label>
+          <input
+            matInput
+            type="month"
+            [ngModel]="backfillMonth()"
+            (ngModelChange)="backfillMonth.set($event)"
+            data-testid="history-backfill-month"
+          />
+        </mat-form-field>
+        <button
+          mat-stroked-button
+          type="button"
+          class="mt-1"
+          [disabled]="!backfillMonth()"
+          (click)="addEarlier()"
+          data-testid="history-backfill-add"
+        >
+          <mat-icon>add</mat-icon>
+          Add month
+        </button>
+      </div>
+    </app-section-card>
+  </div>
+}

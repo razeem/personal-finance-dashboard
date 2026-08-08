@@ -113,6 +113,25 @@ describe('HistoryStore · start mode', () => {
     expect(store.trackingStart()).toBeNull();
   });
 
+  it('catches the previous month up immediately, not on the next load', () => {
+    const store = makeStore();
+    store.setStartMode('fy', undefined, NOW); // starts at 2026-04
+    expect(store.snapshot(LAST_MONTH)?.source).toBe('auto');
+    expect(store.snapshot(THIS_MONTH)).toBeUndefined();
+  });
+
+  it('has nothing to catch up when tracking starts this month', () => {
+    const store = makeStore();
+    store.setStartMode('first-use', undefined, NOW);
+    expect(store.keys()).toEqual([]); // the previous month predates the start
+  });
+
+  it('lists every month from the start to now, filled or not', () => {
+    const store = makeStore();
+    store.setStartMode('fy', undefined, NOW);
+    expect(store.trackedRange()).toEqual(['2026-04', '2026-05', LAST_MONTH, THIS_MONTH]);
+  });
+
   it('is set once — a later call cannot move the start month', () => {
     const store = makeStore();
     store.setStartMode('first-use', undefined, NOW);

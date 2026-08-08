@@ -5,54 +5,70 @@
     icon="shopping_cart"
   />
 
-  <div class="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4 mb-5">
-    <app-stat-tile
-      label="Total needs"
-      [value]="derived().totalNeeds | inr"
-      hint="per month"
-      icon="check_circle"
-      data-testid="spending-total-needs"
-    />
-    <app-stat-tile
-      label="Total wants"
-      [value]="derived().totalWants | inr"
-      hint="per month"
-      icon="redeem"
-      data-testid="spending-total-wants"
-    />
-  </div>
+  <mat-tab-group
+    animationDuration="200ms"
+    [selectedIndex]="selectedTab()"
+    (selectedIndexChange)="onTabChange($event)"
+  >
+    <!-- Budget: the values this pillar owns -->
+    <mat-tab label="Budget">
+      <div class="flex flex-col gap-5 pt-5">
+        <div class="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+          <app-stat-tile
+            label="Total needs"
+            [value]="derived().totalNeeds | inr"
+            hint="per month"
+            icon="check_circle"
+            data-testid="spending-total-needs"
+          />
+          <app-stat-tile
+            label="Total wants"
+            [value]="derived().totalWants | inr"
+            hint="per month"
+            icon="redeem"
+            data-testid="spending-total-wants"
+          />
+        </div>
 
-  <div class="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-5 items-start">
-    <app-section-card
-      title="Needs"
-      eyebrow="Must-have · monthly"
-      icon="check_circle"
-      subtitle="Must-have expenses you pay each month — rent, food, utilities."
-    >
-      <app-line-item-list
-        [ops]="needs"
-        typeLabel="Expense"
-        valueLabel="Amount / month"
-        addLabel="Add need"
-        emptyText="No needs added yet."
-        testid="need"
-      />
-    </app-section-card>
+        <div class="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-5 items-start">
+          <app-section-card
+            title="Needs"
+            eyebrow="Must-have · monthly"
+            icon="check_circle"
+            subtitle="Must-have expenses you pay each month — rent, food, utilities."
+          >
+            <app-line-item-list
+              [ops]="needs"
+              typeLabel="Expense"
+              valueLabel="Amount / month"
+              addLabel="Add need"
+              emptyText="No needs added yet."
+              testid="need"
+            />
+          </app-section-card>
 
-    <app-section-card
-      title="Wants"
-      eyebrow="Nice-to-have · monthly"
-      icon="redeem"
-      subtitle="Monthly lifestyle spending you could live without if needed."
-    >
-      <app-line-item-list
-        [ops]="wants"
-        typeLabel="Expense"
-        valueLabel="Amount / month"
-        addLabel="Add want"
-        emptyText="No wants added yet."
-        testid="want"
-      />
-    </app-section-card>
-  </div>
+          <app-section-card
+            title="Wants"
+            eyebrow="Nice-to-have · monthly"
+            icon="redeem"
+            subtitle="Monthly lifestyle spending you could live without if needed."
+          >
+            <app-line-item-list
+              [ops]="wants"
+              typeLabel="Expense"
+              valueLabel="Amount / month"
+              addLabel="Add want"
+              emptyText="No wants added yet."
+              testid="want"
+            />
+          </app-section-card>
+        </div>
+      </div>
+    </mat-tab>
+
+    <!-- History: what the months actually were -->
+    <mat-tab label="History">
+      <app-spending-history />
+    </mat-tab>
+  </mat-tab-group>
 </div>

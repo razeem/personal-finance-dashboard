@@ -255,6 +255,38 @@ export function applyEdit(
   };
 }
 
+/**
+ * Re-scale a breakdown so it sums to `total`, keeping the category proportions.
+ *
+ * This is what lets the tracker offer a single "what did this month actually
+ * cost?" field without either abandoning the breakdown or making the user retype
+ * seven numbers: the split they already declared is treated as an estimate of
+ * the *shape* of their spending, and only its size is corrected.
+ *
+ * When the current breakdown is empty there are no proportions to keep, so the
+ * whole amount lands in `needs` — the catch-all essential bucket — for the user
+ * to split up later.
+ */
+export function scaleBreakdownTo(breakdown: MonthBreakdown, total: number): MonthBreakdown {
+  const target = Math.max(0, Number.isFinite(total) ? total : 0);
+  const current = sumBreakdown(breakdown);
+  if (current <= 0) return { ...EMPTY_BREAKDOWN, needs: round2(target) };
+
+  const factor = target / current;
+  const scaled: MonthBreakdown = {
+    needs: round2(breakdown.needs * factor),
+    wants: round2(breakdown.wants * factor),
+    insurance: round2(breakdown.insurance * factor),
+    investingMandatory: round2(breakdown.investingMandatory * factor),
+    investingVoluntary: round2(breakdown.investingVoluntary * factor),
+    emis: round2(breakdown.emis * factor),
+    tax: round2(breakdown.tax * factor),
+  };
+  // Rounding seven categories can miss the target by a paisa or two; absorb the
+  // remainder into needs so `sumBreakdown` still returns exactly `total`.
+  return { ...scaled, needs: round2(scaled.needs + (target - sumBreakdown(scaled))) };
+}
+
 /** Month keys present in `state`, ascending. */
 export function sortedKeys(state: HistoryState): MonthKey[] {
   return Object.keys(state.months).sort();

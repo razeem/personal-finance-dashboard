@@ -15,6 +15,7 @@ import {
   monthLabel,
   parseMonthKey,
   previousMonthKey,
+  scaleBreakdownTo,
   shiftMonthKey,
   snapshotFromDerived,
   sortedKeys,
@@ -250,6 +251,47 @@ describe('isUserAuthored', () => {
     expect(isUserAuthored(of('backfill'))).toBe(true);
     expect(isUserAuthored(of('auto'))).toBe(false);
     expect(isUserAuthored(undefined)).toBe(false);
+  });
+});
+
+describe('scaleBreakdownTo', () => {
+  const breakdown = {
+    needs: 20_000,
+    wants: 10_000,
+    insurance: 2_000,
+    investingMandatory: 1_850,
+    investingVoluntary: 3_000,
+    emis: 15_000,
+    tax: 0,
+  };
+
+  it('keeps the proportions and only changes the size', () => {
+    const doubled = scaleBreakdownTo(breakdown, sumBreakdown(breakdown) * 2);
+    expect(doubled.needs).toBe(40_000);
+    expect(doubled.wants).toBe(20_000);
+    expect(doubled.emis).toBe(30_000);
+  });
+
+  it('always sums to exactly the requested total, rounding included', () => {
+    // 51,850 → 10,000 divides unevenly across seven categories.
+    const scaled = scaleBreakdownTo(breakdown, 10_000);
+    expect(sumBreakdown(scaled)).toBe(10_000);
+  });
+
+  it('puts everything in needs when there are no proportions to keep', () => {
+    const fromNothing = scaleBreakdownTo(EMPTY_BREAKDOWN, 25_000);
+    expect(fromNothing.needs).toBe(25_000);
+    expect(sumBreakdown(fromNothing)).toBe(25_000);
+  });
+
+  it('treats a negative or non-finite total as zero', () => {
+    expect(sumBreakdown(scaleBreakdownTo(breakdown, -500))).toBe(0);
+    expect(sumBreakdown(scaleBreakdownTo(breakdown, NaN))).toBe(0);
+  });
+
+  it('leaves the original untouched', () => {
+    scaleBreakdownTo(breakdown, 1);
+    expect(breakdown.needs).toBe(20_000);
   });
 });
 
