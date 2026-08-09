@@ -46,6 +46,41 @@ export function getDb(): Promise<IDBPDatabase<HelperToolsSchema>> {
   return dbPromise;
 }
 
+/**
+ * Rewrite every stored document through `transform`, in one transaction.
+ *
+ * This is how turning encryption on or off migrates what is already stored:
+ * each document's `data` is re-sealed (or opened) while its envelope version and
+ * timestamp are left alone, so no collection's own migrator is triggered by the
+ * change. `skip` keeps the crypto metadata itself out of it — encrypting the
+ * record that says how to decrypt would lock the door and post the key inside.
+ */
+export async function transformAllCollections(
+  transform: (data: unknown, key: string) => Promise<unknown>,
+  { skip = [] }: { skip?: string[] } = {},
+): Promise<void> {
+  const db = await getDb();
+  const [keys, values] = await Promise.all([
+    db.getAllKeys('collections'),
+    db.getAll('collections'),
+  ]);
+
+  const rewritten = await Promise.all(
+    keys.map(async (key, i) => {
+      if (skip.includes(key)) return null;
+      return [key, { ...values[i], data: await transform(values[i].data, key) }] as const;
+    }),
+  );
+
+  const tx = db.transaction('collections', 'readwrite');
+  await Promise.all(
+    rewritten
+      .filter((entry) => entry !== null)
+      .map(([key, envelope]) => tx.store.put(envelope, key)),
+  );
+  await tx.done;
+}
+
 /** Test/utility hook: drop the cached connection so a fresh one is opened next time. */
 export function resetDbConnection(): void {
   dbPromise = null;
@@ -78,13 +113,23 @@ export async function dumpAllCollections(): Promise<Record<string, StoredEnvelop
  */
 export async function writeCollections(
   envelopes: Record<string, StoredEnvelope>,
-  { replace }: { replace: boolean },
+  { replace, keep = [] }: { replace: boolean; keep?: string[] },
 ): Promise<void> {
   const db = await getDb();
+  // `keep` survives a replace: the crypto metadata describes how to unlock THIS
+  // device, so an incoming payload must never clear it — that would leave the
+  // database encrypted with a key nothing knows how to find.
+  const preserved = replace
+    ? await Promise.all(keep.map(async (key) => [key, await db.get('collections', key)] as const))
+    : [];
+
   const tx = db.transaction('collections', 'readwrite');
   if (replace) await tx.store.clear();
-  await Promise.all(
-    Object.entries(envelopes).map(([key, envelope]) => tx.store.put(envelope, key)),
-  );
+  await Promise.all([
+    ...preserved
+      .filter(([, envelope]) => envelope !== undefined)
+      .map(([key, envelope]) => tx.store.put(envelope as StoredEnvelope, key)),
+    ...Object.entries(envelopes).map(([key, envelope]) => tx.store.put(envelope, key)),
+  ]);
   await tx.done;
 }

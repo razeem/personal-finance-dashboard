@@ -13,6 +13,7 @@ import { ProfileForm } from './profile-form';
 import { TaxRulesForm } from './tax-rules-form';
 import { AssumptionsForm } from './assumptions-form';
 import { DataTransfer } from './data-transfer';
+import { EncryptionForm } from './encryption-form';
 
 @Component({
   selector: 'app-settings-dialog',
@@ -27,6 +28,7 @@ import { DataTransfer } from './data-transfer';
     TaxRulesForm,
     AssumptionsForm,
     DataTransfer,
+    EncryptionForm,
   ],
   template: `
     <div class="head">
@@ -89,6 +91,11 @@ import { DataTransfer } from './data-transfer';
                 <mat-button-toggle value="international">Intl</mat-button-toggle>
               </mat-button-toggle-group>
             </section>
+          </div>
+        </mat-tab>
+        <mat-tab label="Encryption">
+          <div class="pt-4">
+            <app-encryption-form />
           </div>
         </mat-tab>
         <mat-tab label="Transfer data">

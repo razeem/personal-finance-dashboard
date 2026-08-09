@@ -1,0 +1,211 @@
+<div class="flex flex-col gap-4">
+  @if (!available()) {
+    <p class="m-0 text-[0.88rem] text-[var(--mat-sys-error)]" data-testid="encryption-unavailable">
+      This browser doesn't support the encryption this needs.
+    </p>
+  } @else if (!enabled()) {
+    <!-- Off: explain the bargain before taking a passphrase -->
+    <div class="flex flex-col gap-2">
+      <h3 class="m-0 text-[1rem] font-semibold">Encrypt everything on this device</h3>
+      <p class="m-0 text-[0.85rem] text-[var(--mat-sys-on-surface-variant)]">
+        Your data never leaves this browser, but anyone who can open the browser can read it.
+        Turning this on encrypts every stored figure, and asks for a passphrase each time you open
+        the app.
+      </p>
+      <p
+        class="m-0 rounded-[var(--r-control)] border border-[var(--mat-sys-error)] p-3 text-[0.85rem]"
+        data-testid="encryption-warning"
+      >
+        <strong>There is no way to reset this passphrase.</strong> It is the only thing that can
+        open your data — if you forget it, the data is gone. Write it down somewhere safe before you
+        continue.
+      </p>
+    </div>
+
+    <mat-form-field appearance="outline" subscriptSizing="dynamic">
+      <mat-label>Passphrase</mat-label>
+      <input
+        matInput
+        type="password"
+        autocomplete="new-password"
+        [ngModel]="newPassphrase()"
+        (ngModelChange)="newPassphrase.set($event)"
+        data-testid="encryption-passphrase"
+      />
+      <mat-hint>At least {{ MIN_PASSPHRASE_LENGTH }} characters</mat-hint>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" subscriptSizing="dynamic">
+      <mat-label>Confirm passphrase</mat-label>
+      <input
+        matInput
+        type="password"
+        autocomplete="new-password"
+        [ngModel]="confirmPassphrase()"
+        (ngModelChange)="confirmPassphrase.set($event)"
+        data-testid="encryption-confirm"
+      />
+      @if (mismatch()) {
+        <mat-hint class="!text-[var(--mat-sys-error)]">These don't match.</mat-hint>
+      }
+    </mat-form-field>
+
+    @if (busy()) {
+      <mat-progress-bar mode="indeterminate" data-testid="encryption-busy" />
+    }
+
+    <button
+      mat-flat-button
+      type="button"
+      [disabled]="!canEnable() || busy()"
+      (click)="enable()"
+      data-testid="encryption-enable"
+    >
+      <mat-icon>lock</mat-icon>
+      Turn on encryption
+    </button>
+  } @else {
+    <!-- On -->
+    <div class="flex flex-wrap items-center gap-2">
+      <span
+        class="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] px-3 py-1 text-[0.8rem] font-semibold"
+        data-testid="encryption-status"
+      >
+        <mat-icon class="!h-4 !w-4 !text-base">lock</mat-icon>
+        Encryption is on
+      </span>
+      <button
+        mat-stroked-button
+        type="button"
+        (click)="lockNow()"
+        data-testid="encryption-lock-now"
+      >
+        Lock now
+      </button>
+    </div>
+    <p class="m-0 text-[0.82rem] text-[var(--mat-sys-on-surface-variant)]">
+      Locks when you close the app, and after {{ idleMinutes }} minutes of inactivity.
+    </p>
+
+    @if (busy()) {
+      <mat-progress-bar mode="indeterminate" data-testid="encryption-busy" />
+    }
+
+    <!-- Passkey -->
+    <div class="flex flex-col gap-2 border-t border-[var(--border)] pt-4">
+      <h3 class="m-0 text-[0.95rem] font-semibold">Unlock with a passkey</h3>
+      <p class="m-0 text-[0.82rem] text-[var(--mat-sys-on-surface-variant)]">
+        Use Touch ID, Face ID or Windows Hello instead of typing the passphrase. The passphrase
+        keeps working — it's what gets you back in if the passkey is ever lost.
+      </p>
+      @if (hasBiometric()) {
+        <div class="flex flex-wrap gap-2">
+          <span class="text-[0.85rem]" data-testid="encryption-biometric-on">
+            A passkey is set up on this device.
+          </span>
+          <button
+            mat-stroked-button
+            type="button"
+            [disabled]="busy()"
+            (click)="removeBiometric()"
+            data-testid="encryption-remove-biometric"
+          >
+            Remove passkey
+          </button>
+        </div>
+      } @else if (biometricSupported()) {
+        <button
+          mat-stroked-button
+          type="button"
+          class="self-start"
+          [disabled]="busy()"
+          (click)="addBiometric()"
+          data-testid="encryption-add-biometric"
+        >
+          <mat-icon>fingerprint</mat-icon>
+          Add a passkey
+        </button>
+      } @else {
+        <span class="text-[0.82rem] text-[var(--mat-sys-on-surface-variant)]">
+          This device has no biometric sensor available to the browser.
+        </span>
+      }
+    </div>
+
+    <!-- Change passphrase -->
+    <div class="flex flex-col gap-2 border-t border-[var(--border)] pt-4">
+      <h3 class="m-0 text-[0.95rem] font-semibold">Change passphrase</h3>
+      <div class="grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-2">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Current</mat-label>
+          <input
+            matInput
+            type="password"
+            autocomplete="current-password"
+            [ngModel]="currentPassphrase()"
+            (ngModelChange)="currentPassphrase.set($event)"
+            data-testid="encryption-current"
+          />
+        </mat-form-field>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>New</mat-label>
+          <input
+            matInput
+            type="password"
+            autocomplete="new-password"
+            [ngModel]="nextPassphrase()"
+            (ngModelChange)="nextPassphrase.set($event)"
+            data-testid="encryption-next"
+          />
+        </mat-form-field>
+      </div>
+      <button
+        mat-stroked-button
+        type="button"
+        class="self-start"
+        [disabled]="busy() || !currentPassphrase() || !nextPassphrase()"
+        (click)="changePassphrase()"
+        data-testid="encryption-change"
+      >
+        Change passphrase
+      </button>
+    </div>
+
+    <!-- Disable -->
+    <div class="flex flex-col gap-2 border-t border-[var(--border)] pt-4">
+      <h3 class="m-0 text-[0.95rem] font-semibold">Turn encryption off</h3>
+      <p class="m-0 text-[0.82rem] text-[var(--mat-sys-on-surface-variant)]">
+        Decrypts everything back to plain storage. Confirm with your passphrase.
+      </p>
+      <div class="flex flex-wrap items-start gap-2">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Passphrase</mat-label>
+          <input
+            matInput
+            type="password"
+            autocomplete="current-password"
+            [ngModel]="disablePassphrase()"
+            (ngModelChange)="disablePassphrase.set($event)"
+            data-testid="encryption-disable-passphrase"
+          />
+        </mat-form-field>
+        <button
+          mat-stroked-button
+          type="button"
+          class="mt-1"
+          [disabled]="busy() || !disablePassphrase()"
+          (click)="disable()"
+          data-testid="encryption-disable"
+        >
+          Turn off
+        </button>
+      </div>
+    </div>
+  }
+
+  @if (error()) {
+    <p class="m-0 text-[0.85rem] text-[var(--mat-sys-error)]" data-testid="encryption-error">
+      {{ error() }}
+    </p>
+  }
+</div>

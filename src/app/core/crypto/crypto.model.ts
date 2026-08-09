@@ -79,6 +79,12 @@ export interface WrappedKey {
   iterations?: number;
   /** Free-form label for the UI ("iPhone Touch ID"). */
   label?: string;
+  /**
+   * base64url credential id, for `prf` records. The passkey is discoverable so
+   * this is not strictly required to sign in, but naming it in `allowCredentials`
+   * makes the prompt land on the right key instead of offering a chooser.
+   */
+  credentialId?: string;
 }
 
 // --- Availability ----------------------------------------------------------

@@ -4,6 +4,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { EncryptionService } from '../../core/crypto/encryption.service';
 import { ImportMode, TransferService } from '../../core/transfer/transfer.service';
 import {
   summarize,
@@ -33,6 +34,22 @@ import { QrScanner } from './qr-scanner';
             other device to bring your data across.
           </p>
         </header>
+
+        @if (encrypted()) {
+          <!--
+            The code has to be readable by a device that has never seen this
+            passphrase, so it is deliberately plaintext. Say so where the button
+            is, not in a help page nobody opens.
+          -->
+          <p
+            class="m-0 rounded-[var(--r-control)] border border-[var(--mat-sys-error)] p-3 text-sm"
+            data-testid="transfer-plaintext-warning"
+          >
+            <strong>This code is not encrypted.</strong> Your data is encrypted on this device, but
+            a transfer code has to be readable by the device you're moving to. Treat the code as
+            carefully as the data itself, and delete it once you've used it.
+          </p>
+        }
 
         <div class="flex flex-wrap gap-2">
           <button
@@ -229,6 +246,9 @@ import { QrScanner } from './qr-scanner';
 export class DataTransfer {
   private readonly transfer = inject(TransferService);
   private readonly snackBar = inject(MatSnackBar);
+
+  /** Drives the "this code is not encrypted" warning — only shown when it bites. */
+  protected readonly encrypted = inject(EncryptionService).enabled;
 
   protected readonly exporting = signal(false);
   protected readonly exportCode = signal('');

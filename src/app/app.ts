@@ -15,6 +15,8 @@ import { PreferencesStore } from './core/preferences/preferences-store';
 import { ProfileStore } from './core/profile/profile-store';
 import { FinanceWorkbookService } from './core/export/finance-workbook.service';
 import { SeoService } from './core/seo/seo.service';
+import { EncryptionService } from './core/crypto/encryption.service';
+import { LockScreen } from './features/settings/lock-screen';
 
 @Component({
   selector: 'app-root',
@@ -28,6 +30,7 @@ import { SeoService } from './core/seo/seo.service';
     MatButtonModule,
     MatMenuModule,
     MatTooltipModule,
+    LockScreen,
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
@@ -44,6 +47,15 @@ export class App {
   protected readonly collapsed = this.prefs.sidebarCollapsed;
   protected readonly theme = this.prefs.theme;
   protected readonly exporting = signal(false);
+
+  /**
+   * The lock gate. `ready` guards the first paint so the app never flashes into
+   * view before we know whether it should be locked.
+   */
+  private readonly encryption = inject(EncryptionService);
+  protected readonly locked = this.encryption.locked;
+  protected readonly encryptionReady = this.encryption.ready;
+
 
   /** Export the whole connected model (all pillars) as one .xlsx workbook — global action. */
   protected async exportWorkbook(): Promise<void> {
