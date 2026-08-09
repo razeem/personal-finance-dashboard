@@ -63,12 +63,16 @@ src/app/
     export/    excel-export.service.ts (exceljs, dynamically imported; simple + composed sheets),
                finance-workbook.service.ts (whole-model .xlsx — the Dashboard "Export workbook")
     image/     image-compression.ts (canvas → WebP Blob)
+    crypto/    crypto.model.ts (pure WebCrypto: master key, wrapping, AES-GCM payloads),
+               encryption.service.ts (session + lock lifecycle; holds the key in memory only),
+               biometric.service.ts (WebAuthn PRF passkey unlock)
   shared/ui/   stat-tile, section-card, pillar-card, coming-soon, line-item-list,
                inline-prompt, rating-input, page-header, slider-field (calculator input: chip + slider),
                spark-chart (dependency-free SVG line/bar chart; pure geometry in spark-chart.model.ts)
   features/
     dashboard/  income/  spending/  saving/  loan/  insurance/  investing/  tax/
-    settings/ (profile-form + tax-rules-form + assumptions-form + settings-dialog)
+    settings/ (profile-form + tax-rules-form + assumptions-form + encryption-form
+               + lock-screen + settings-dialog)
     coming-soon-page/  (the placeholder for any `status: 'soon'` pillar — currently NONE; all 8 pillars are active)
 ```
 
@@ -174,6 +178,19 @@ Alongside the declaration pillars there are three **scratchpad calculators**. Th
 Slider/donut styling is shared, not per-component: the `.app-slider` and `.app-donut-seg` utilities in `styles.scss` (global, so no `::ng-deep` needed).
 
 **In-page tabs are deep-linkable**: Income (`?tab=minimum|goals|ideas`), Tax (`?tab=calculator|comparer`), Loan (`?tab=loans|forecast|calculator`), Spending (`?tab=budget|history`) and Investing (`?tab=contributions|inflation|nps`) sync a `?tab=` query param to the `mat-tab-group` `selectedIndex` (via `toSignal(route.queryParamMap)` + `router.navigate(..., { replaceUrl: true })`). A query param (not a fragment or child routes) keeps tab components mounted so local state — e.g. the ICER sort snapshot — survives tab switches. The **ICER table sorts on a one-shot snapshot** (`order` signal set on header click), never a live `computed`, so editing a rating never reorders rows mid-edit.
+
+## At-rest encryption (optional, off by default)
+
+`core/crypto/` encrypts every stored document. It is **opt-in** from Settings → Encryption, and everything below only applies once it is on.
+
+- **One master key, wrapped — never derived.** `crypto.model.ts` (pure, unit-tested, no Angular) generates an AES-GCM-256 master key and wraps it separately per unlock method: PBKDF2-SHA-256 @ 600k for a passphrase, HKDF-SHA-256 for a passkey's PRF output. Wrapping rather than deriving is what makes a lost passkey survivable and makes a passphrase change a **rewrap, not a re-encryption of everything**. Derivation params (salt, iterations) live on each `WrappedKey`, so the cost can be raised later without stranding old records.
+- **The key never leaves memory.** `EncryptionService` holds it in a **module-scope variable — not a signal, not a store** — so a page load always relocks. Within a session a 15-minute idle timer (`IDLE_LOCK_MS`) relocks too, driven by document-level listeners inside the service; the shell's template knows nothing about it.
+- **The lock is a real gate, not a curtain.** `StorageService.bind()` awaits `EncryptionService.whenReadable()` **before it reads anything**, so while locked every store sits at its defaults and there is no plaintext in memory to reveal. `App` renders `LockScreen` over the shell.
+- **`crypto-meta` is a reserved, always-plaintext collection** (`CRYPTO_META_KEY`) holding the wrapped keys — encrypting the record that says how to decrypt would post the key inside the locked door. It lives in the existing `collections` store, so **no `DB_VERSION` bump was needed**; `writeCollections(..., { keep })` protects it from an import's `replace`.
+- **Enabling/disabling migrates what is already stored** via `transformAllCollections`, and does so in the safe order: encrypt everything _then_ record enabled; decrypt everything _then_ record disabled. Interrupted either way, the database matches what the flag claims.
+- **Transfer codes stay plaintext**, by design — another device has never seen this passphrase, and the whole point is portability. `TransferService.exportAll` decrypts on the way out and drops `crypto-meta`; import re-seals into whatever this device uses. The Transfer tab shows a warning whenever encryption is on.
+- **The lock screen deliberately avoids Material form fields and `FormsModule`.** It ships in the _initial_ bundle (it must render before anything else), and those cost ~150 kB there — native inputs + Tailwind instead. Keep it that way.
+- **Testing**: `e2e/encryption.spec.ts` asserts against **raw IndexedDB**, not the UI, so "it's encrypted" is a claim about the disk. `e2e/encryption-passkey.spec.ts` drives Chromium's virtual authenticator (`WebAuthn.addVirtualAuthenticator` with `hasPrf: true`) — PRF really is exercised in CI, including "losing the passkey does not lose the data".
 
 ## Cross-device data transfer (export / import)
 
