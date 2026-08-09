@@ -91,6 +91,26 @@ import { EncryptionForm } from './encryption-form';
                 <mat-button-toggle value="international">Intl</mat-button-toggle>
               </mat-button-toggle-group>
             </section>
+
+            <section
+              class="pref print:hidden mt-6 border-t border-[var(--border)] pt-5"
+              data-testid="support-row"
+            >
+              <div class="pref__label">
+                <span class="pref__title">Support</span>
+                <span class="pref__help">If this saved you time, you can buy me a coffee.</span>
+              </div>
+              <a
+                mat-stroked-button
+                href="https://buymeacoffee.com/razeem"
+                target="_blank"
+                rel="noopener"
+                data-testid="buy-me-a-coffee"
+              >
+                <mat-icon>local_cafe</mat-icon>
+                Buy me a coffee
+              </a>
+            </section>
           </div>
         </mat-tab>
         <mat-tab label="Encryption">

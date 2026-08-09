@@ -49,6 +49,17 @@ test('uploads, compresses and persists a photo', async ({ page }) => {
   await expect(page.getByTestId('profile-photo')).toBeVisible();
 });
 
+test('preferences offers a plain buy-me-a-coffee link', async ({ page }) => {
+  await openSettings(page);
+  await page.getByRole('tab', { name: 'Preferences' }).click();
+
+  const link = page.getByTestId('buy-me-a-coffee');
+  await expect(link).toBeVisible();
+  await expect(link).toHaveAttribute('href', 'https://buymeacoffee.com/razeem');
+  await expect(link).toHaveAttribute('target', '_blank');
+  await expect(link).toHaveAttribute('rel', 'noopener');
+});
+
 test('theme toggle switches to dark', async ({ page }) => {
   await openSettings(page);
   await page.getByRole('tab', { name: 'Preferences' }).click();

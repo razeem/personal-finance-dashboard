@@ -47,3 +47,7 @@ See [CLAUDE.md](CLAUDE.md) for the full architecture, the **persistence pattern*
 Pushing to `master` triggers `.github/workflows/deploy.yml`, which lints, runs unit + e2e tests, builds the site (base href set from the repo name), and publishes it to **GitHub Pages** via GitHub Actions — no build output is committed.
 
 One-time setup: in the repo, **Settings → Pages → Source → "GitHub Actions"**. The site is served at `https://<owner>.github.io/<repo>/`.
+
+## Support
+
+If this saved you time, you can [buy me a coffee](https://buymeacoffee.com/razeem). Entirely optional — the app is free, offline-first, and keeps your data on your own device either way.
