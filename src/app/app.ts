@@ -56,7 +56,6 @@ export class App {
   protected readonly locked = this.encryption.locked;
   protected readonly encryptionReady = this.encryption.ready;
 
-
   /** Export the whole connected model (all pillars) as one .xlsx workbook — global action. */
   protected async exportWorkbook(): Promise<void> {
     this.exporting.set(true);
